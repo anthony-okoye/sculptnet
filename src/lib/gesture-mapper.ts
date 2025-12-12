@@ -94,7 +94,9 @@ export class GestureMapper {
     const distance = this.calculateDistance(thumbTip, indexTip);
 
     // Only process if within valid pinch range
-    if (distance < PINCH_DISTANCE_MIN || distance > PINCH_DISTANCE_MAX) {
+    // Add small epsilon for floating-point tolerance at boundaries
+    const epsilon = 0.001;
+    if (distance < (PINCH_DISTANCE_MIN - epsilon) || distance > (PINCH_DISTANCE_MAX + epsilon)) {
       return null;
     }
 
