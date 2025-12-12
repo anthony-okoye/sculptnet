@@ -127,7 +127,7 @@ export function SettingsDialog({ trigger, onSettingsUpdated }: SettingsDialogPro
       });
     } else {
       toast.error('Invalid API key format', {
-        description: result.error.errors[0]?.message || 'Please check the key format.',
+        description: result.error.issues[0]?.message || 'Please check the key format.',
       });
     }
   }, [apiKey]);
@@ -143,7 +143,7 @@ export function SettingsDialog({ trigger, onSettingsUpdated }: SettingsDialogPro
     if (!result.success) {
       setIsValidKey(false);
       toast.error('Cannot save invalid API key', {
-        description: result.error.errors[0]?.message || 'Please fix the validation errors.',
+        description: result.error.issues[0]?.message || 'Please fix the validation errors.',
       });
       return;
     }

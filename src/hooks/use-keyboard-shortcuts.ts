@@ -8,7 +8,7 @@ interface KeyboardShortcut {
   metaKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
-  handler: () => void;
+  handler: (event?: KeyboardEvent) => void;
   description: string;
 }
 
@@ -42,7 +42,7 @@ export function useKeyboardShortcuts({ shortcuts, enabled = true }: UseKeyboardS
       if (matchingShortcut) {
         // Prevent default browser behavior for shortcuts
         event.preventDefault();
-        matchingShortcut.handler();
+        matchingShortcut.handler(event);
       }
     };
 

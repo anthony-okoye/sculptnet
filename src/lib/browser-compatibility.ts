@@ -26,6 +26,10 @@ export interface BrowserInfo {
  * Detects the current browser and version
  */
 export function detectBrowser(): BrowserInfo {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return { name: 'Unknown', version: 'Unknown', isSupported: false };
+  }
+  
   const ua = navigator.userAgent;
   let name = 'Unknown';
   let version = 'Unknown';
@@ -67,6 +71,10 @@ export function detectBrowser(): BrowserInfo {
  * Checks if getUserMedia is available
  */
 export function checkGetUserMedia(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+  
   return !!(
     navigator.mediaDevices &&
     navigator.mediaDevices.getUserMedia
@@ -77,6 +85,10 @@ export function checkGetUserMedia(): boolean {
  * Checks if WebGL 2.0 is available
  */
 export function checkWebGL2(): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return false;
+  }
+  
   try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2');
@@ -90,6 +102,10 @@ export function checkWebGL2(): boolean {
  * Checks if WebXR is available (optional feature)
  */
 export function checkWebXR(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+  
   return 'xr' in navigator;
 }
 
@@ -97,6 +113,10 @@ export function checkWebXR(): boolean {
  * Checks if WebSocket is available
  */
 export function checkWebSocket(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  
   return 'WebSocket' in window;
 }
 

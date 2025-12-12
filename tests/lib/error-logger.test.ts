@@ -166,10 +166,10 @@ describe('ErrorLogger', () => {
         return value * 2;
       };
 
-      const wrapped = withErrorHandling(asyncFn, {
+      const wrapped = withErrorHandling(asyncFn as (...args: unknown[]) => Promise<unknown>, {
         component: 'TestComponent',
         action: 'asyncFn',
-      });
+      }) as (value: number) => Promise<number>;
 
       // Should work normally
       const result = await wrapped(5);
@@ -188,10 +188,10 @@ describe('ErrorLogger', () => {
         return value * 2;
       };
 
-      const wrapped = withErrorHandlingSync(syncFn, {
+      const wrapped = withErrorHandlingSync(syncFn as (...args: unknown[]) => unknown, {
         component: 'TestComponent',
         action: 'syncFn',
-      });
+      }) as (value: number) => number;
 
       // Should work normally
       const result = wrapped(5);

@@ -302,7 +302,7 @@ export default function Home() {
     {
       key: 's',
       ctrlKey: true,
-      handler: (e: Event) => {
+      handler: (e?: KeyboardEvent) => {
         e?.preventDefault();
         handleExportSingle();
       },
@@ -311,7 +311,7 @@ export default function Home() {
     {
       key: 's',
       metaKey: true,
-      handler: (e: Event) => {
+      handler: (e?: KeyboardEvent) => {
         e?.preventDefault();
         handleExportSingle();
       },

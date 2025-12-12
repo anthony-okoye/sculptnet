@@ -89,7 +89,6 @@ export class HandTracker {
       action: 'initialize',
       metadata: {
         numHands: this.options.numHands,
-        fps: this.options.fps,
       },
     });
 

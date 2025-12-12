@@ -136,7 +136,7 @@ export function getUserFriendlyErrorMessage(error: unknown): string {
  */
 export function useErrorState(autoDismissMs?: number) {
   const [error, setError] = React.useState<Error | string | null>(null);
-  const timeoutRef = React.useRef<NodeJS.Timeout>();
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const showError = React.useCallback((err: Error | string) => {
     setError(err);
