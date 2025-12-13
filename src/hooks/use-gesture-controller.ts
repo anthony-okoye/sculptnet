@@ -240,15 +240,22 @@ export function useGestureController(
    * Internal trigger generation function
    */
   const triggerGenerationInternal = useCallback(async () => {
-    // Prevent multiple simultaneous generations
-    if (state.isGenerating) return null;
+    // Prevent multiple simultaneous generations using setState callback
+    let shouldGenerate = false;
+    setState(prev => {
+      if (prev.isGenerating) {
+        return prev; // Already generating, don't update
+      }
+      shouldGenerate = true;
+      return { 
+        ...prev, 
+        isGenerating: true, 
+        generationStatus: 'generating',
+        error: null,
+      };
+    });
 
-    setState(prev => ({ 
-      ...prev, 
-      isGenerating: true, 
-      generationStatus: 'generating',
-      error: null,
-    }));
+    if (!shouldGenerate) return null;
 
     try {
       const prompt = getPrompt();
@@ -277,7 +284,7 @@ export function useGestureController(
       }
       return null;
     }
-  }, [state.isGenerating, getPrompt, onImageGenerated, onGenerationError]);
+  }, [getPrompt, onImageGenerated, onGenerationError]);
 
   /**
    * Initialize all components
@@ -325,7 +332,8 @@ export function useGestureController(
    * Start gesture detection
    */
   const startDetection = useCallback(() => {
-    if (!state.isInitialized) {
+    // Check if initialized using ref to avoid stale closure
+    if (!handTrackerRef.current || !webcamManagerRef.current) {
       setState(prev => ({ 
         ...prev, 
         error: 'Controller must be initialized before starting detection',
@@ -333,19 +341,11 @@ export function useGestureController(
       return;
     }
 
-    const videoElement = webcamManagerRef.current?.getVideoElement();
+    const videoElement = webcamManagerRef.current.getVideoElement();
     if (!videoElement) {
       setState(prev => ({ 
         ...prev, 
         error: 'Video element not available',
-      }));
-      return;
-    }
-
-    if (!handTrackerRef.current) {
-      setState(prev => ({ 
-        ...prev, 
-        error: 'Hand tracker not initialized',
       }));
       return;
     }
@@ -362,7 +362,7 @@ export function useGestureController(
       isDetecting: true,
       error: null,
     }));
-  }, [state.isInitialized, handleDetectionResults]);
+  }, [handleDetectionResults]);
 
   /**
    * Stop gesture detection

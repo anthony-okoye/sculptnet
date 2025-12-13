@@ -338,7 +338,7 @@ export default function Home() {
       gestureController.dispose();
       collaboration.disconnect();
     };
-  }, [gestureController, collaboration]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950">

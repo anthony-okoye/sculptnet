@@ -50,7 +50,13 @@ export function ARSceneInner({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        // Wait for video to be ready before playing
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().catch(err => {
+            console.warn('Video play interrupted:', err);
+            // This is usually fine - video will play when ready
+          });
+        };
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to access webcam';
@@ -91,7 +97,7 @@ export function ARSceneInner({
     scene.setAttribute('embedded', '');
     scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('renderer', 'antialias: true; alpha: true');
-    scene.setAttribute('background', 'color: transparent');
+    scene.setAttribute('background', 'color: #000000; transparent: true');
     
     // Add camera
     const camera = document.createElement('a-camera');
@@ -139,7 +145,7 @@ export function ARSceneInner({
       }
       sceneRef.current = null;
     };
-  }, [handleSceneLoaded, initializeWebcam, cleanupWebcam]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div
@@ -154,8 +160,11 @@ export function ARSceneInner({
           className="absolute inset-0 w-full h-full object-cover"
           playsInline
           muted
-          autoPlay
           style={{ transform: 'scaleX(-1)' }} // Mirror for selfie view
+          onError={(e) => {
+            // Suppress play() interruption errors - they're harmless
+            console.debug('Video element error (usually harmless):', e);
+          }}
         />
       )}
 
