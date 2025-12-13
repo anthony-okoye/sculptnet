@@ -17,6 +17,9 @@ import type { GenerationResult, GenerationStatus } from '@/lib/bria-client';
 /** Maximum number of generations to keep in history */
 export const MAX_HISTORY_SIZE = 10;
 
+/** Maximum number of generations to keep in timeline (for WOW feature) */
+export const MAX_TIMELINE_SIZE = 20;
+
 // ============ Types ============
 
 /**
@@ -29,6 +32,10 @@ export interface GenerationHistoryEntry extends GenerationResult {
   inARScene: boolean;
   /** AR scene entity ID if displayed */
   arEntityId?: string;
+  /** Gesture type that triggered this generation (for timeline display) */
+  gesture?: string;
+  /** Thumbnail URL (same as imageUrl for now) */
+  thumbnail?: string;
 }
 
 /**
@@ -37,6 +44,8 @@ export interface GenerationHistoryEntry extends GenerationResult {
 export interface GenerationState {
   /** Generation history (most recent last) */
   history: GenerationHistoryEntry[];
+  /** Timeline history (last 20 generations for WOW feature) */
+  timeline: GenerationHistoryEntry[];
   /** Current generation status */
   status: GenerationStatus;
   /** Current error message if any */
@@ -50,7 +59,7 @@ export interface GenerationState {
  */
 export interface GenerationActions {
   /** Add a generation result to history */
-  addGeneration: (result: GenerationResult, arEntityId?: string) => GenerationHistoryEntry;
+  addGeneration: (result: GenerationResult, arEntityId?: string, gesture?: string) => GenerationHistoryEntry;
   /** Remove a generation from history by ID */
   removeGeneration: (id: string) => void;
   /** Clear all generation history */
@@ -67,6 +76,10 @@ export interface GenerationActions {
   getEntry: (id: string) => GenerationHistoryEntry | undefined;
   /** Get entries currently in AR scene */
   getARSceneEntries: () => GenerationHistoryEntry[];
+  /** Load timeline from localStorage */
+  loadTimeline: () => void;
+  /** Save timeline to localStorage */
+  saveTimeline: () => void;
 }
 
 export type GenerationStore = GenerationState & GenerationActions;
@@ -88,34 +101,47 @@ function generateEntryId(): string {
 export const useGenerationStore = create<GenerationStore>((set, get) => ({
   // Initial state
   history: [],
+  timeline: [],
   status: 'idle',
   error: null,
   isGenerating: false,
 
   /**
    * Add a generation result to history
-   * Keeps only the last MAX_HISTORY_SIZE entries
+   * Keeps only the last MAX_HISTORY_SIZE entries in history
+   * Keeps only the last MAX_TIMELINE_SIZE entries in timeline
    */
-  addGeneration: (result: GenerationResult, arEntityId?: string): GenerationHistoryEntry => {
+  addGeneration: (result: GenerationResult, arEntityId?: string, gesture?: string): GenerationHistoryEntry => {
     const entry: GenerationHistoryEntry = {
       ...result,
       id: generateEntryId(),
       inARScene: !!arEntityId,
       arEntityId,
+      gesture,
+      thumbnail: result.imageUrl, // Use imageUrl as thumbnail
     };
 
     set(state => {
       const newHistory = [...state.history, entry];
-      // Keep only the last MAX_HISTORY_SIZE entries
+      const newTimeline = [...state.timeline, entry];
+      
+      // Keep only the last MAX_HISTORY_SIZE entries in history
       const trimmedHistory = newHistory.slice(-MAX_HISTORY_SIZE);
+      
+      // Keep only the last MAX_TIMELINE_SIZE entries in timeline
+      const trimmedTimeline = newTimeline.slice(-MAX_TIMELINE_SIZE);
       
       return {
         history: trimmedHistory,
+        timeline: trimmedTimeline,
         status: 'idle',
         error: null,
         isGenerating: false,
       };
     });
+
+    // Save timeline to localStorage
+    get().saveTimeline();
 
     return entry;
   },
@@ -133,7 +159,8 @@ export const useGenerationStore = create<GenerationStore>((set, get) => ({
    * Clear all generation history
    */
   clearHistory: () => {
-    set({ history: [] });
+    set({ history: [], timeline: [] });
+    get().saveTimeline();
   },
 
   /**
@@ -186,6 +213,37 @@ export const useGenerationStore = create<GenerationStore>((set, get) => ({
    */
   getARSceneEntries: (): GenerationHistoryEntry[] => {
     return get().history.filter(entry => entry.inARScene);
+  },
+
+  /**
+   * Load timeline from localStorage
+   */
+  loadTimeline: () => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const stored = localStorage.getItem('sculptnet-timeline');
+      if (stored) {
+        const timeline = JSON.parse(stored) as GenerationHistoryEntry[];
+        set({ timeline });
+      }
+    } catch (error) {
+      console.error('Failed to load timeline from localStorage:', error);
+    }
+  },
+
+  /**
+   * Save timeline to localStorage
+   */
+  saveTimeline: () => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const { timeline } = get();
+      localStorage.setItem('sculptnet-timeline', JSON.stringify(timeline));
+    } catch (error) {
+      console.error('Failed to save timeline to localStorage:', error);
+    }
   },
 }));
 

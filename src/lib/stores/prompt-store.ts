@@ -61,6 +61,8 @@ export interface PromptActions {
   export: () => string;
   /** Import prompt from JSON string */
   import: (json: string) => UpdateResult;
+  /** Restore a prompt from history (for timeline feature) */
+  restorePrompt: (prompt: FIBOStructuredPrompt) => UpdateResult;
 }
 
 export type PromptStore = PromptState & PromptActions;
@@ -319,6 +321,32 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
       return {
         success: false,
         error: `JSON parse error: ${error}`,
+      };
+    }
+  },
+
+  /**
+   * Restore a prompt from history (for timeline feature)
+   * Validates the prompt before restoring
+   */
+  restorePrompt: (prompt: FIBOStructuredPrompt): UpdateResult => {
+    const validation = validateFIBOPrompt(prompt);
+    
+    if (validation.success) {
+      set({
+        prompt,
+        lastValidPrompt: prompt,
+        lastValidation: validation,
+      });
+      
+      return { success: true };
+    } else {
+      // Validation failed - keep current state
+      set({ lastValidation: validation });
+      
+      return {
+        success: false,
+        error: validation.errors.map(e => `${e.path}: ${e.message}`).join('; '),
       };
     }
   },
