@@ -18,6 +18,8 @@ import { StatusBar } from '@/components/status-bar';
 import { CompatibilityBanner } from '@/components/compatibility-banner';
 import { HelpDialog, useFirstTimeHelp } from '@/components/help-dialog';
 import { ParameterHUD } from '@/components/parameter-hud';
+import { CompareView } from '@/components/compare-view';
+import { HistoryTimeline } from '@/components/history-timeline';
 import { useGestureController } from '@/hooks/use-gesture-controller';
 import { useARScene } from '@/hooks/use-ar-scene';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
@@ -28,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { useGenerationStore, MAX_HISTORY_SIZE } from '@/lib/stores/generation-store';
 import { ExportManager } from '@/lib/export-manager';
 import type { GenerationResult } from '@/lib/bria-client';
+import type { GenerationHistoryEntry } from '@/lib/stores/generation-store';
 import { toast } from 'sonner';
 import { checkBrowserCompatibility, shouldUseFallbackMode } from '@/lib/browser-compatibility';
 import { isMobileViewport, getOptimalDetectionFPS, ensureMobileViewportMeta } from '@/lib/mobile-utils';
@@ -75,6 +78,13 @@ export default function Home() {
   // Help dialog - show on first load
   const { showHelp, setShowHelp } = useFirstTimeHelp();
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  
+  // Compare mode state
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareImages, setCompareImages] = useState<{
+    imageA: GenerationHistoryEntry | null;
+    imageB: GenerationHistoryEntry | null;
+  }>({ imageA: null, imageB: null });
   
   // Show help dialog on first load
   useEffect(() => {
@@ -282,6 +292,31 @@ export default function Home() {
     setHelpDialogOpen(true);
   }, []);
 
+  // Compare mode handlers
+  const handleToggleCompareMode = useCallback(() => {
+    // Need at least 2 images to compare
+    if (generationHistory.length < 2) {
+      toast.error('Need at least 2 images to compare');
+      return;
+    }
+    
+    if (!compareMode) {
+      // Enter compare mode - compare the two most recent images
+      const imageB = generationHistory[generationHistory.length - 1];
+      const imageA = generationHistory[generationHistory.length - 2];
+      
+      setCompareImages({ imageA, imageB });
+      setCompareMode(true);
+    } else {
+      // Exit compare mode
+      setCompareMode(false);
+    }
+  }, [compareMode, generationHistory]);
+
+  const handleCloseCompareMode = useCallback(() => {
+    setCompareMode(false);
+  }, []);
+
   // Keyboard shortcuts
   const keyboardShortcuts = useMemo(() => [
     {
@@ -301,6 +336,11 @@ export default function Home() {
       description: 'Generate image manually',
     },
     {
+      key: 'c',
+      handler: handleToggleCompareMode,
+      description: 'Toggle compare mode',
+    },
+    {
       key: '?',
       handler: handleHelpClick,
       description: 'Show help dialog',
@@ -308,7 +348,9 @@ export default function Home() {
     {
       key: 'Escape',
       handler: () => {
-        if (helpDialogOpen) {
+        if (compareMode) {
+          handleCloseCompareMode();
+        } else if (helpDialogOpen) {
           setHelpDialogOpen(false);
         }
       },
@@ -337,7 +379,10 @@ export default function Home() {
     handleStopGestures,
     handleStartGestures,
     handleManualGenerate,
+    handleToggleCompareMode,
     handleHelpClick,
+    compareMode,
+    handleCloseCompareMode,
     helpDialogOpen,
     handleExportSingle,
   ]);
@@ -440,6 +485,7 @@ export default function Home() {
               onExportMultiple={handleExportMultiple}
               onExportPSD={handleExportPSD}
               onHelpClick={handleHelpClick}
+              onCompareClick={handleToggleCompareMode}
               collaborationEnabled={collaborationEnabled}
               onCollaborationToggle={handleCollaborationToggle}
               isCollaborationActive={collaboration.isConnected}
@@ -594,6 +640,18 @@ export default function Home() {
       
       {/* Parameter HUD - Live parameter display */}
       <ParameterHUD />
+      
+      {/* History Timeline */}
+      <HistoryTimeline />
+      
+      {/* Compare Mode */}
+      {compareMode && compareImages.imageA && compareImages.imageB && (
+        <CompareView
+          imageA={compareImages.imageA}
+          imageB={compareImages.imageB}
+          onClose={handleCloseCompareMode}
+        />
+      )}
     </div>
   );
 }

@@ -42,7 +42,14 @@ interface Position {
 
 const STORAGE_KEY_VISIBLE = 'sculptnet-hud-visible';
 const STORAGE_KEY_POSITION = 'sculptnet-hud-position';
-const DEFAULT_POSITION: Position = { x: window.innerWidth - 420, y: 20 };
+
+// Function to get default position (client-side only)
+const getDefaultPosition = (): Position => {
+  if (typeof window === 'undefined') {
+    return { x: 20, y: 20 }; // Fallback for SSR
+  }
+  return { x: window.innerWidth - 420, y: 20 };
+};
 
 // Parameter configurations with ranges
 const PARAMETER_CONFIGS: Array<{
@@ -127,7 +134,7 @@ export function ParameterHUD() {
   
   // State
   const [visible, setVisible] = useState(true);
-  const [position, setPosition] = useState<Position>(DEFAULT_POSITION);
+  const [position, setPosition] = useState<Position>(getDefaultPosition);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
   const [parameters, setParameters] = useState<ParameterValue[]>([]);

@@ -28,6 +28,7 @@ import {
   Sliders,
   HelpCircle,
   Settings,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -60,6 +61,7 @@ export interface ControlPanelProps {
   onExportMultiple?: () => void;
   onExportPSD?: () => void;
   onHelpClick?: () => void;
+  onCompareClick?: () => void;
   onSettingsUpdated?: () => void;
   
   // Feature toggles
@@ -92,6 +94,7 @@ export function ControlPanel({
   onExportMultiple,
   onExportPSD,
   onHelpClick,
+  onCompareClick,
   onSettingsUpdated,
   collaborationEnabled = false,
   onCollaborationToggle,
@@ -288,6 +291,24 @@ export function ControlPanel({
             </div>
           )}
         </div>
+
+        {/* Divider */}
+        <div className="border-t border-zinc-800 my-4" />
+
+        {/* Compare Mode Button - Touch-friendly */}
+        <Button
+          onClick={onCompareClick}
+          variant="outline"
+          className="w-full min-h-[44px] text-sm sm:text-base"
+          size="lg"
+          disabled={!onCompareClick}
+        >
+          <ArrowLeftRight className="w-4 h-4 mr-2" />
+          Compare Mode
+          <kbd className="ml-auto px-2 py-0.5 text-xs bg-zinc-800 rounded border border-zinc-700">
+            C
+          </kbd>
+        </Button>
 
         {/* Divider */}
         <div className="border-t border-zinc-800 my-4" />
