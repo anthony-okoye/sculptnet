@@ -17,6 +17,7 @@ import { ControlPanel } from '@/components/control-panel';
 import { StatusBar } from '@/components/status-bar';
 import { CompatibilityBanner } from '@/components/compatibility-banner';
 import { HelpDialog, useFirstTimeHelp } from '@/components/help-dialog';
+import { ParameterHUD } from '@/components/parameter-hud';
 import { useGestureController } from '@/hooks/use-gesture-controller';
 import { useARScene } from '@/hooks/use-ar-scene';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
@@ -102,6 +103,7 @@ export default function Home() {
    * - Adds image to AR scene
    * - Stores result in generation history (last 10 images)
    * - Updates UI status
+   * - Shows success notification
    * 
    * Requirements: 2.2, 2.3, 4.3
    */
@@ -117,18 +119,31 @@ export default function Home() {
       arEntityId,
       historySize: generationStore.history.length + 1,
     });
+    
+    // Show success toast
+    toast.success('Image Generated!', {
+      description: 'Your image has been added to the AR scene',
+      duration: 3000,
+    });
   }, [arScene, generationStore]);
 
   /**
    * Handle generation error
    * - Updates error state in store
    * - Logs error for debugging
+   * - Shows toast notification
    * 
    * Requirements: 4.4
    */
   const handleGenerationError = useCallback((error: Error) => {
     console.error('Generation error:', error);
     generationStore.setError(error.message);
+    
+    // Show error toast
+    toast.error('Generation Failed', {
+      description: error.message,
+      duration: 5000,
+    });
   }, [generationStore]);
 
   /**
@@ -576,6 +591,9 @@ export default function Home() {
 
       {/* Help Dialog */}
       <HelpDialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen} />
+      
+      {/* Parameter HUD - Live parameter display */}
+      <ParameterHUD />
     </div>
   );
 }
