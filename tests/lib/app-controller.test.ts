@@ -240,20 +240,19 @@ describe('AppController', () => {
     });
 
     it('should handle generation errors', async () => {
-      const { BriaAPIError } = await import('@/lib/bria-client');
+      // Create a controller with a mocked BriaClient that throws errors
+      const errorController = createAppController({}, callbacks);
       
-      vi.doMock('@/lib/bria-client', () => ({
-        BriaClient: class {
-          generate = vi.fn().mockRejectedValue(
-            new BriaAPIError('API Error', 'API_ERROR', 500)
-          );
-          cancel = vi.fn();
-        },
-        BriaAPIError,
-      }));
-
-      const { createAppController: createErrorController } = await import('@/lib/app-controller');
-      const errorController = createErrorController({}, callbacks);
+      // Replace the briaClient instance with a mock that throws
+      const mockBriaClient = {
+        generate: vi.fn().mockRejectedValue(new Error('API Error')),
+        cancel: vi.fn(),
+        getStatus: vi.fn().mockReturnValue('idle'),
+      };
+      
+      // Access private field for testing (TypeScript will complain but it works at runtime)
+      (errorController as any).briaClient = mockBriaClient;
+      
       await errorController.initialize();
       
       await expect(errorController.generateImage()).rejects.toThrow();
@@ -276,21 +275,21 @@ describe('AppController', () => {
 
   describe('Error Handling', () => {
     it('should track last error', async () => {
-      vi.doMock('@/lib/webcam-manager', () => ({
-        WebcamManager: class {
-          initialize = vi.fn().mockRejectedValue({
-            type: 'permission_denied',
-            message: 'Permission denied',
-          });
-          getVideoElement = vi.fn();
-          stop = vi.fn();
-          isActive = vi.fn();
-        },
-        getWebcamErrorMessage: vi.fn((error) => error.message),
-      }));
-
-      const { createAppController: createErrorController } = await import('@/lib/app-controller');
-      const errorController = createErrorController({}, callbacks);
+      const errorController = createAppController({}, callbacks);
+      
+      // Replace the webcamManager instance with a mock that throws
+      const mockWebcamManager = {
+        initialize: vi.fn().mockRejectedValue({
+          type: 'permission_denied',
+          message: 'Permission denied',
+        }),
+        getVideoElement: vi.fn(),
+        stop: vi.fn(),
+        isActive: vi.fn(),
+      };
+      
+      // Access private field for testing
+      (errorController as any).webcamManager = mockWebcamManager;
       
       await expect(errorController.initialize()).rejects.toThrow();
       

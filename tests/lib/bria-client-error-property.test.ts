@@ -169,9 +169,14 @@ describe('BriaClient Error Handling - Property Tests', () => {
           const client = new BriaClient();
 
           // Attempt generation should throw
-          const error = await client.generate(prompt).catch(e => e);
-          expect(error).toBeInstanceOf(BriaAPIError);
-          expect(error.status).toBe(500);
+          try {
+            await client.generate(prompt);
+            // Should not reach here
+            expect.fail('Expected generate to throw');
+          } catch (error) {
+            expect(error).toBeInstanceOf(BriaAPIError);
+            expect((error as BriaAPIError).status).toBe(500);
+          }
           
           // Should only call fetch once (no retries for 500)
           expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -226,11 +231,16 @@ describe('BriaClient Error Handling - Property Tests', () => {
           const client = new BriaClient();
 
           // Attempt generation should throw
-          const error = await client.generate(prompt).catch(e => e);
-          expect(error).toBeInstanceOf(Error);
-          // Should be wrapped in BriaAPIError
-          expect(error).toBeInstanceOf(BriaAPIError);
-          expect(error.code).toBeTruthy();
+          try {
+            await client.generate(prompt);
+            // Should not reach here
+            expect.fail('Expected generate to throw');
+          } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            // Should be wrapped in BriaAPIError
+            expect(error).toBeInstanceOf(BriaAPIError);
+            expect((error as BriaAPIError).code).toBeTruthy();
+          }
         }
       ),
       { numRuns: 10 } // Reduced for faster tests

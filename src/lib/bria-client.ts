@@ -190,6 +190,10 @@ export class BriaClient {
       },
     });
 
+    console.log('[SculptNet] 🎨 Starting image generation...');
+    console.log('[SculptNet] 📝 Prompt type:', typeof prompt);
+    console.log('[SculptNet] ⚙️ Options:', options);
+
     try {
       // Build request body
       const body: Record<string, unknown> = {
@@ -230,9 +234,14 @@ export class BriaClient {
 
       const data = await response.json() as GenerateResponse;
 
+      console.log('[SculptNet] 📬 Received response from Bria API');
+      console.log('[SculptNet] 🆔 Request ID:', data.request_id);
+      console.log('[SculptNet] 🔗 Status URL:', data.status_url);
+
       // If sync mode, result is immediate
       if (options.sync && data.result) {
         this.status = 'idle';
+        console.log('[SculptNet] ✅ Sync generation completed immediately');
         logInfo('Image generation completed (sync)', {
           component: 'BriaClient',
           action: 'generate',
@@ -306,14 +315,21 @@ export class BriaClient {
     originalPrompt: string | FIBOStructuredPrompt
   ): Promise<GenerationResult> {
     const startTime = Date.now();
+    let pollCount = 0;
+    
+    console.log(`[SculptNet] 🔄 Starting status polling for request: ${requestId}`);
     
     while (Date.now() - startTime < POLLING_TIMEOUT_MS) {
       // Check if cancelled
       if (this.abortController?.signal.aborted) {
+        console.log(`[SculptNet] ❌ Polling cancelled for request: ${requestId}`);
         throw new BriaAPIError('Generation cancelled', 'CANCELLED');
       }
 
       try {
+        pollCount++;
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        
         // Get client-side API key if available
         const clientApiKey = getStoredApiKey();
         const headers: Record<string, string> = {};
@@ -332,8 +348,12 @@ export class BriaClient {
 
         const data = await response.json() as StatusResponse;
 
+        console.log(`[SculptNet] 📊 Poll #${pollCount} (${elapsedSeconds}s): Status = ${data.status}`);
+
         if (data.status === 'COMPLETED' && data.result) {
           this.status = 'idle';
+          console.log(`[SculptNet] ✅ Generation completed! Request: ${requestId}`);
+          console.log(`[SculptNet] 🖼️ Image URL: ${data.result.image_url}`);
           return {
             imageUrl: data.result.image_url,
             prompt: data.result.structured_prompt 
@@ -347,6 +367,7 @@ export class BriaClient {
 
         if (data.status === 'ERROR') {
           this.status = 'error';
+          console.error(`[SculptNet] ❌ Generation failed: ${data.error?.message || 'Unknown error'}`);
           throw new BriaAPIError(
             data.error?.message || 'Generation failed',
             'GENERATION_FAILED',
@@ -364,9 +385,11 @@ export class BriaClient {
           throw error;
         }
         if (error instanceof Error && error.name === 'AbortError') {
+          console.log(`[SculptNet] ❌ Polling aborted for request: ${requestId}`);
           throw new BriaAPIError('Generation cancelled', 'CANCELLED');
         }
         
+        console.warn(`[SculptNet] ⚠️ Polling error (will retry): ${error instanceof Error ? error.message : 'Unknown'}`);
         // For other errors, continue polling (might be transient)
         await this.sleep(POLLING_INTERVAL_MS);
       }
@@ -374,6 +397,7 @@ export class BriaClient {
 
     // Timeout reached
     this.status = 'error';
+    console.error(`[SculptNet] ⏱️ Polling timeout after ${POLLING_TIMEOUT_MS / 1000}s for request: ${requestId}`);
     throw new GenerationTimeoutError(requestId);
   }
 
