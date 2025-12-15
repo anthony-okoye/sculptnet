@@ -20,6 +20,8 @@ import { HelpDialog, useFirstTimeHelp } from '@/components/help-dialog';
 import { ParameterHUD } from '@/components/parameter-hud';
 import { CompareView } from '@/components/compare-view';
 import { HistoryTimeline } from '@/components/history-timeline';
+import { GalleryMode } from '@/components/gallery-mode';
+import { useDeviceMotion } from '@/hooks/use-device-motion';
 import { useGestureController } from '@/hooks/use-gesture-controller';
 import { useARScene } from '@/hooks/use-ar-scene';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
@@ -85,6 +87,10 @@ export default function Home() {
     imageA: GenerationHistoryEntry | null;
     imageB: GenerationHistoryEntry | null;
   }>({ imageA: null, imageB: null });
+  
+  // Gallery mode state
+  const [galleryMode, setGalleryMode] = useState(false);
+  const deviceMotion = useDeviceMotion();
   
   // Show help dialog on first load
   useEffect(() => {
@@ -317,6 +323,55 @@ export default function Home() {
     setCompareMode(false);
   }, []);
 
+  // Gallery mode handlers
+  const handleToggleGalleryMode = useCallback(async () => {
+    if (!galleryMode) {
+      // Request device motion permission if needed (iOS)
+      if (deviceMotion.isSupported && !deviceMotion.hasPermission) {
+        const granted = await deviceMotion.requestPermission();
+        if (!granted) {
+          toast.error('Device motion permission required for gallery walk mode');
+          return;
+        }
+      }
+      
+      // Start listening to device motion
+      if (deviceMotion.isSupported) {
+        deviceMotion.startListening();
+      }
+      
+      setGalleryMode(true);
+      toast.success('Gallery Mode activated', {
+        description: deviceMotion.isSupported 
+          ? 'Walk around to explore your gallery' 
+          : 'Use controls to navigate',
+      });
+    } else {
+      // Stop listening to device motion
+      if (deviceMotion.isListening) {
+        deviceMotion.stopListening();
+      }
+      
+      setGalleryMode(false);
+      toast.info('Gallery Mode deactivated');
+    }
+  }, [galleryMode, deviceMotion]);
+
+  const handleGalleryPlaceImage = useCallback((entryId: string, position: { x: number; y: number; z: number }) => {
+    const entry = generationHistory.find(e => e.id === entryId);
+    if (!entry) return '';
+    
+    return arScene.addImage(entry.imageUrl, position);
+  }, [generationHistory, arScene]);
+
+  const handleGalleryRemoveImage = useCallback((arEntityId: string) => {
+    arScene.removeImage(arEntityId);
+  }, [arScene]);
+
+  const handleGalleryClearAll = useCallback(() => {
+    arScene.clearScene();
+  }, [arScene]);
+
   // Keyboard shortcuts
   const keyboardShortcuts = useMemo(() => [
     {
@@ -341,6 +396,11 @@ export default function Home() {
       description: 'Toggle compare mode',
     },
     {
+      key: 'v',
+      handler: handleToggleGalleryMode,
+      description: 'Toggle gallery mode',
+    },
+    {
       key: '?',
       handler: handleHelpClick,
       description: 'Show help dialog',
@@ -348,7 +408,9 @@ export default function Home() {
     {
       key: 'Escape',
       handler: () => {
-        if (compareMode) {
+        if (galleryMode) {
+          handleToggleGalleryMode();
+        } else if (compareMode) {
           handleCloseCompareMode();
         } else if (helpDialogOpen) {
           setHelpDialogOpen(false);
@@ -380,7 +442,9 @@ export default function Home() {
     handleStartGestures,
     handleManualGenerate,
     handleToggleCompareMode,
+    handleToggleGalleryMode,
     handleHelpClick,
+    galleryMode,
     compareMode,
     handleCloseCompareMode,
     helpDialogOpen,
@@ -486,6 +550,9 @@ export default function Home() {
               onExportPSD={handleExportPSD}
               onHelpClick={handleHelpClick}
               onCompareClick={handleToggleCompareMode}
+              onGalleryModeClick={handleToggleGalleryMode}
+              galleryModeEnabled={true}
+              isGalleryModeActive={galleryMode}
               collaborationEnabled={collaborationEnabled}
               onCollaborationToggle={handleCollaborationToggle}
               isCollaborationActive={collaboration.isConnected}
@@ -651,6 +718,26 @@ export default function Home() {
           imageB={compareImages.imageB}
           onClose={handleCloseCompareMode}
         />
+      )}
+      
+      {/* Gallery Mode */}
+      {galleryMode && (
+        <div className="fixed bottom-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 z-50">
+          <GalleryMode
+            isActive={galleryMode}
+            onToggle={setGalleryMode}
+            entries={generationHistory}
+            onPlaceImage={handleGalleryPlaceImage}
+            onRemoveImage={handleGalleryRemoveImage}
+            onClearAll={handleGalleryClearAll}
+            deviceOrientation={deviceMotion.orientation ? {
+              alpha: deviceMotion.orientation.alpha ?? 0,
+              beta: deviceMotion.orientation.beta ?? 0,
+              gamma: deviceMotion.orientation.gamma ?? 0,
+              absolute: deviceMotion.orientation.absolute,
+            } as DeviceOrientationEvent : undefined}
+          />
+        </div>
       )}
     </div>
   );

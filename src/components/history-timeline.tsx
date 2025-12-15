@@ -30,11 +30,11 @@ import {
   MoveVertical, 
   Frame, 
   Sparkles,
-  X,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ColorDepthIndicator } from '@/components/color-depth-indicator';
 import type { GenerationHistoryEntry } from '@/lib/stores/generation-store';
 import type { FIBOStructuredPrompt } from '@/types/fibo';
 
@@ -257,6 +257,18 @@ function TimelineItem({ entry, diffs, onClick }: TimelineItemProps) {
             <div className="absolute top-1 right-1 bg-background/80 backdrop-blur-sm rounded-full p-1.5">
               <GestureIcon className="h-3 w-3 text-foreground" />
             </div>
+            
+            {/* Color Depth Indicator - Requirements: 16.5 */}
+            {entry.colorDepth && (
+              <div className="absolute bottom-1 left-1">
+                <ColorDepthIndicator
+                  colorDepth={entry.colorDepth}
+                  isHDR={entry.isHDR}
+                  variant="compact"
+                  className="text-[10px] px-1 py-0.5 h-auto"
+                />
+              </div>
+            )}
             
             {/* Hover Overlay */}
             <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

@@ -29,6 +29,7 @@ import {
   HelpCircle,
   Settings,
   ArrowLeftRight,
+  Grid3x3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,6 +63,7 @@ export interface ControlPanelProps {
   onExportPSD?: () => void;
   onHelpClick?: () => void;
   onCompareClick?: () => void;
+  onGalleryModeClick?: () => void;
   onSettingsUpdated?: () => void;
   
   // Feature toggles
@@ -71,6 +73,9 @@ export interface ControlPanelProps {
   
   hapticEnabled?: boolean;
   onHapticToggle?: (enabled: boolean) => void;
+  
+  galleryModeEnabled?: boolean;
+  isGalleryModeActive?: boolean;
   
   // Optional customization
   className?: string;
@@ -95,12 +100,15 @@ export function ControlPanel({
   onExportPSD,
   onHelpClick,
   onCompareClick,
+  onGalleryModeClick,
   onSettingsUpdated,
   collaborationEnabled = false,
   onCollaborationToggle,
   isCollaborationActive = false,
   hapticEnabled = true,
   onHapticToggle,
+  galleryModeEnabled = true,
+  isGalleryModeActive = false,
   className = '',
 }: ControlPanelProps) {
   const [activeTab, setActiveTab] = useState<'gesture' | 'manual'>('gesture');
@@ -295,20 +303,34 @@ export function ControlPanel({
         {/* Divider */}
         <div className="border-t border-zinc-800 my-4" />
 
-        {/* Compare Mode Button - Touch-friendly */}
-        <Button
-          onClick={onCompareClick}
-          variant="outline"
-          className="w-full min-h-[44px] text-sm sm:text-base"
-          size="lg"
-          disabled={!onCompareClick}
-        >
-          <ArrowLeftRight className="w-4 h-4 mr-2" />
-          Compare Mode
-          <kbd className="ml-auto px-2 py-0.5 text-xs bg-zinc-800 rounded border border-zinc-700">
-            C
-          </kbd>
-        </Button>
+        {/* View Mode Buttons - Touch-friendly */}
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            onClick={onCompareClick}
+            variant="outline"
+            className="w-full min-h-[44px] text-sm sm:text-base"
+            size="lg"
+            disabled={!onCompareClick}
+          >
+            <ArrowLeftRight className="w-4 h-4 mr-2" />
+            <span className="hidden sm:inline">Compare</span>
+            <span className="sm:hidden">Compare</span>
+          </Button>
+          
+          {galleryModeEnabled && (
+            <Button
+              onClick={onGalleryModeClick}
+              variant={isGalleryModeActive ? 'default' : 'outline'}
+              className="w-full min-h-[44px] text-sm sm:text-base"
+              size="lg"
+              disabled={!onGalleryModeClick}
+            >
+              <Grid3x3 className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Gallery</span>
+              <span className="sm:hidden">Gallery</span>
+            </Button>
+          )}
+        </div>
 
         {/* Divider */}
         <div className="border-t border-zinc-800 my-4" />

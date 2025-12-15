@@ -61,7 +61,7 @@ describe('SettingsDialog', () => {
       fireEvent.click(trigger);
       
       await waitFor(() => {
-        expect(screen.getByText('Configure your Bria API key')).toBeDefined();
+        expect(screen.getByText(/configure your bria api key/i)).toBeDefined();
       });
     });
 

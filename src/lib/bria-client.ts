@@ -10,6 +10,7 @@
 import type { FIBOStructuredPrompt } from '@/types/fibo';
 import { getStoredApiKey } from '@/components/settings-dialog';
 import { logError, logInfo, logWarning } from './error-logger';
+import { handleHDRFallback } from '@/lib/hdr-utils';
 
 // ============ Types ============
 
@@ -27,6 +28,10 @@ export interface GenerationOptions {
   seed?: number;
   /** Whether to wait for sync response (default false) */
   sync?: boolean;
+  /** Enable HDR mode (16-bit color depth) - Requirements: 16.1 */
+  hdr?: boolean;
+  /** Color depth (8 or 16 bit) - Requirements: 16.1 */
+  color_depth?: 8 | 16;
 }
 
 /**
@@ -43,6 +48,10 @@ export interface GenerationResult {
   seed: number;
   /** Request ID from Bria API */
   requestId: string;
+  /** Whether this was generated in HDR mode - Requirements: 16.1 */
+  isHDR?: boolean;
+  /** Color depth (8 or 16 bit) - Requirements: 16.1, 16.5 */
+  colorDepth?: 8 | 16;
 }
 
 /**
@@ -215,6 +224,16 @@ export class BriaClient {
         body.seed = options.seed;
       }
 
+      // Add HDR parameters if enabled
+      // Requirements: 16.1 - Request 16-bit color depth from Bria API
+      if (options.hdr || options.color_depth === 16) {
+        body.color_depth = 16;
+        body.hdr = true;
+        console.log('[SculptNet] 🎨 HDR mode enabled - requesting 16-bit color depth');
+      } else if (options.color_depth === 8) {
+        body.color_depth = 8;
+      }
+
       // Get client-side API key if available
       const clientApiKey = getStoredApiKey();
       const headers: Record<string, string> = {
@@ -247,6 +266,21 @@ export class BriaClient {
           action: 'generate',
           metadata: { requestId: data.request_id },
         });
+        
+        // Requirements: 16.4 - Handle HDR fallback gracefully
+        const hdrFallback = handleHDRFallback(
+          options.hdr || options.color_depth === 16,
+          data
+        );
+        
+        if (hdrFallback.fellBack) {
+          console.warn('[SculptNet] ⚠️ HDR fallback:', hdrFallback.message);
+          logWarning(hdrFallback.message || 'HDR not supported, fell back to 8-bit', {
+            component: 'BriaClient',
+            action: 'generate',
+          });
+        }
+        
         return {
           imageUrl: data.result.image_url,
           prompt: data.result.structured_prompt 
@@ -255,6 +289,8 @@ export class BriaClient {
           timestamp: Date.now(),
           seed: data.result.seed,
           requestId: data.request_id,
+          isHDR: hdrFallback.isHDR,
+          colorDepth: hdrFallback.colorDepth,
         };
       }
 
@@ -265,7 +301,7 @@ export class BriaClient {
         action: 'generate',
         metadata: { requestId: data.request_id },
       });
-      return await this.pollStatus(data.status_url, data.request_id, prompt);
+      return await this.pollStatus(data.status_url, data.request_id, prompt, options);
 
     } catch (error) {
       this.status = 'error';
@@ -307,12 +343,14 @@ export class BriaClient {
    * @param statusUrl - URL to poll for status
    * @param requestId - Request ID for tracking
    * @param originalPrompt - Original prompt for result
+   * @param options - Original generation options (for HDR tracking)
    * @returns Generation result
    */
   async pollStatus(
     statusUrl: string,
     requestId: string,
-    originalPrompt: string | FIBOStructuredPrompt
+    originalPrompt: string | FIBOStructuredPrompt,
+    options: GenerationOptions = {}
   ): Promise<GenerationResult> {
     const startTime = Date.now();
     let pollCount = 0;
@@ -352,8 +390,26 @@ export class BriaClient {
 
         if (data.status === 'COMPLETED' && data.result) {
           this.status = 'idle';
+          
+          // Requirements: 16.4 - Handle HDR fallback gracefully
+          const hdrFallback = handleHDRFallback(
+            options.hdr || options.color_depth === 16,
+            data
+          );
+          
+          if (hdrFallback.fellBack) {
+            console.warn('[SculptNet] ⚠️ HDR fallback:', hdrFallback.message);
+            logWarning(hdrFallback.message || 'HDR not supported, fell back to 8-bit', {
+              component: 'BriaClient',
+              action: 'pollStatus',
+            });
+          }
+          
           console.log(`[SculptNet] ✅ Generation completed! Request: ${requestId}`);
           console.log(`[SculptNet] 🖼️ Image URL: ${data.result.image_url}`);
+          if (hdrFallback.isHDR) {
+            console.log(`[SculptNet] 🎨 HDR mode: ${hdrFallback.colorDepth}-bit color depth`);
+          }
           return {
             imageUrl: data.result.image_url,
             prompt: data.result.structured_prompt 
@@ -362,6 +418,8 @@ export class BriaClient {
             timestamp: Date.now(),
             seed: data.result.seed,
             requestId,
+            isHDR: hdrFallback.isHDR,
+            colorDepth: hdrFallback.colorDepth,
           };
         }
 

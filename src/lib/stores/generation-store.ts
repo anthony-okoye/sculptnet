@@ -36,6 +36,10 @@ export interface GenerationHistoryEntry extends GenerationResult {
   gesture?: string;
   /** Thumbnail URL (same as imageUrl for now) */
   thumbnail?: string;
+  /** Whether this was generated in HDR mode */
+  isHDR?: boolean;
+  /** Color depth (8 or 16 bit) */
+  colorDepth?: 8 | 16;
 }
 
 /**
@@ -59,7 +63,7 @@ export interface GenerationState {
  */
 export interface GenerationActions {
   /** Add a generation result to history */
-  addGeneration: (result: GenerationResult, arEntityId?: string, gesture?: string) => GenerationHistoryEntry;
+  addGeneration: (result: GenerationResult, arEntityId?: string, gesture?: string, isHDR?: boolean, colorDepth?: 8 | 16) => GenerationHistoryEntry;
   /** Remove a generation from history by ID */
   removeGeneration: (id: string) => void;
   /** Clear all generation history */
@@ -111,7 +115,7 @@ export const useGenerationStore = create<GenerationStore>((set, get) => ({
    * Keeps only the last MAX_HISTORY_SIZE entries in history
    * Keeps only the last MAX_TIMELINE_SIZE entries in timeline
    */
-  addGeneration: (result: GenerationResult, arEntityId?: string, gesture?: string): GenerationHistoryEntry => {
+  addGeneration: (result: GenerationResult, arEntityId?: string, gesture?: string, isHDR?: boolean, colorDepth?: 8 | 16): GenerationHistoryEntry => {
     const entry: GenerationHistoryEntry = {
       ...result,
       id: generateEntryId(),
@@ -119,6 +123,8 @@ export const useGenerationStore = create<GenerationStore>((set, get) => ({
       arEntityId,
       gesture,
       thumbnail: result.imageUrl, // Use imageUrl as thumbnail
+      isHDR,
+      colorDepth,
     };
 
     set(state => {

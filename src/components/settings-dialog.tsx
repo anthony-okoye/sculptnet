@@ -30,9 +30,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Settings, Eye, EyeOff, ExternalLink, CheckCircle2, XCircle } from 'lucide-react';
+import { Settings, Eye, EyeOff, ExternalLink, CheckCircle2, XCircle, RotateCcw } from 'lucide-react';
 import { z } from 'zod';
+import {
+  DEFAULT_PRESETS,
+  type PresetConfig,
+  type PresetGestureType,
+  savePresetsToStorage,
+  loadPresetsFromStorage,
+  clearPresetsFromStorage,
+} from '@/lib/gesture-presets';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 // ============ Types & Validation ============
 
@@ -53,6 +64,7 @@ interface SettingsDialogProps {
 
 const STORAGE_KEY_API_KEY = 'sculptnet_bria_api_key';
 const STORAGE_KEY_CONNECTION_STATUS = 'sculptnet_connection_status';
+const STORAGE_KEY_HDR_ENABLED = 'sculptnet_hdr_enabled';
 
 // ============ Component ============
 
@@ -72,9 +84,16 @@ export function SettingsDialog({ trigger, onSettingsUpdated }: SettingsDialogPro
   
   // Connection status
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'unknown'>('unknown');
+  
+  // Preset customization state
+  const [presets, setPresets] = useState<Record<Exclude<PresetGestureType, null>, PresetConfig>>(DEFAULT_PRESETS);
+  const [hasPresetChanges, setHasPresetChanges] = useState(false);
+  
+  // HDR mode state
+  const [hdrEnabled, setHdrEnabled] = useState(false);
 
   /**
-   * Load API key from localStorage when dialog opens
+   * Load API key and presets from localStorage when dialog opens
    */
   useEffect(() => {
     if (open) {
@@ -92,6 +111,19 @@ export function SettingsDialog({ trigger, onSettingsUpdated }: SettingsDialogPro
       }
       
       setConnectionStatus(storedStatus || 'unknown');
+      
+      // Load presets
+      const storedPresets = loadPresetsFromStorage();
+      if (storedPresets) {
+        setPresets(storedPresets);
+      } else {
+        setPresets(DEFAULT_PRESETS);
+      }
+      setHasPresetChanges(false);
+      
+      // Load HDR setting
+      const storedHdr = localStorage.getItem(STORAGE_KEY_HDR_ENABLED);
+      setHdrEnabled(storedHdr === 'true');
     }
   }, [open]);
 
@@ -133,35 +165,79 @@ export function SettingsDialog({ trigger, onSettingsUpdated }: SettingsDialogPro
   }, [apiKey]);
 
   /**
-   * Save the API key to localStorage
-   * Requirements: 4.1, 4.2
+   * Update a preset parameter
+   * Requirements: 15.5
+   */
+  const handlePresetParameterChange = useCallback((
+    presetType: Exclude<PresetGestureType, null>,
+    paramPath: string,
+    value: string
+  ) => {
+    setPresets(prev => ({
+      ...prev,
+      [presetType]: {
+        ...prev[presetType],
+        parameters: {
+          ...prev[presetType].parameters,
+          [paramPath]: value,
+        },
+      },
+    }));
+    setHasPresetChanges(true);
+  }, []);
+
+  /**
+   * Reset presets to defaults
+   * Requirements: 15.5
+   */
+  const handleResetPresets = useCallback(() => {
+    setPresets(DEFAULT_PRESETS);
+    setHasPresetChanges(true);
+    toast.info('Presets reset to defaults', {
+      description: 'Click Save to apply the changes.',
+    });
+  }, []);
+
+  /**
+   * Save the API key and presets to localStorage
+   * Requirements: 4.1, 4.2, 15.5
    */
   const handleSave = useCallback(() => {
-    // Validate before saving
-    const result = apiKeySchema.safeParse(apiKey);
-    
-    if (!result.success) {
-      setIsValidKey(false);
-      toast.error('Cannot save invalid API key', {
-        description: result.error.issues[0]?.message || 'Please fix the validation errors.',
-      });
-      return;
+    // Validate API key before saving
+    if (apiKey) {
+      const result = apiKeySchema.safeParse(apiKey);
+      
+      if (!result.success) {
+        setIsValidKey(false);
+        toast.error('Cannot save invalid API key', {
+          description: result.error.issues[0]?.message || 'Please fix the validation errors.',
+        });
+        return;
+      }
+      
+      // Save API key to localStorage
+      localStorage.setItem(STORAGE_KEY_API_KEY, apiKey);
+      
+      // Update connection status to unknown (will be tested on next API call)
+      setConnectionStatus('unknown');
+      localStorage.setItem(STORAGE_KEY_CONNECTION_STATUS, 'unknown');
     }
     
-    // Save to localStorage
-    localStorage.setItem(STORAGE_KEY_API_KEY, apiKey);
+    // Save presets if changed
+    if (hasPresetChanges) {
+      savePresetsToStorage(presets);
+    }
     
-    // Update connection status to unknown (will be tested on next API call)
-    setConnectionStatus('unknown');
-    localStorage.setItem(STORAGE_KEY_CONNECTION_STATUS, 'unknown');
+    // Save HDR setting
+    localStorage.setItem(STORAGE_KEY_HDR_ENABLED, String(hdrEnabled));
     
-    toast.success('API key saved', {
-      description: 'Your API key has been saved. It will be used for image generation.',
+    toast.success('Settings saved', {
+      description: 'Your settings have been saved successfully.',
     });
     
     setOpen(false);
     onSettingsUpdated?.();
-  }, [apiKey, onSettingsUpdated]);
+  }, [apiKey, presets, hasPresetChanges, hdrEnabled, onSettingsUpdated]);
 
   /**
    * Clear the API key from localStorage
@@ -223,23 +299,30 @@ export function SettingsDialog({ trigger, onSettingsUpdated }: SettingsDialogPro
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Configure your Bria API key and application settings.
+            Configure your Bria API key, gesture presets, and application settings.
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-6 py-4">
-          {/* Connection Status */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Connection Status</span>
-            {getConnectionBadge()}
-          </div>
+        <Tabs defaultValue="api" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="api">API Key</TabsTrigger>
+            <TabsTrigger value="presets">Presets</TabsTrigger>
+            <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="api" className="space-y-6 py-4">
+            {/* Connection Status */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Connection Status</span>
+              {getConnectionBadge()}
+            </div>
 
-          {/* API Key Section */}
-          <div className="space-y-3">
+            {/* API Key Section */}
+            <div className="space-y-3">
             <div className="space-y-1">
               <label htmlFor="api-key" className="text-sm font-medium">
                 Bria API Key
@@ -332,14 +415,192 @@ export function SettingsDialog({ trigger, onSettingsUpdated }: SettingsDialogPro
             </p>
           </div>
 
-          {/* Production Note */}
-          <div className="rounded-md bg-muted p-3">
-            <p className="text-xs text-muted-foreground">
-              <strong>Note:</strong> In production, the API key is stored securely server-side in environment variables. 
-              This client-side override is for demo and development purposes only.
-            </p>
-          </div>
-        </div>
+            {/* Production Note */}
+            <div className="rounded-md bg-muted p-3">
+              <p className="text-xs text-muted-foreground">
+                <strong>Note:</strong> In production, the API key is stored securely server-side in environment variables. 
+                This client-side override is for demo and development purposes only.
+              </p>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="presets" className="space-y-6 py-4">
+            {/* Preset Customization Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium">Customize Gesture Presets</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Modify the parameters applied by each preset gesture
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetPresets}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset
+                </Button>
+              </div>
+
+              {/* Peace Sign Preset */}
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">✌️</span>
+                  <div>
+                    <h4 className="text-sm font-medium">{presets.peace.name}</h4>
+                    <p className="text-xs text-muted-foreground">{presets.peace.description}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Mood & Atmosphere</label>
+                    <Input
+                      value={presets.peace.parameters['aesthetics.mood_atmosphere'] || ''}
+                      onChange={(e) => handlePresetParameterChange('peace', 'aesthetics.mood_atmosphere', e.target.value)}
+                      placeholder="e.g., cinematic, dramatic"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Lighting Conditions</label>
+                    <Input
+                      value={presets.peace.parameters['lighting.conditions'] || ''}
+                      onChange={(e) => handlePresetParameterChange('peace', 'lighting.conditions', e.target.value)}
+                      placeholder="e.g., dramatic rim lighting"
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Thumbs Up Preset */}
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">👍</span>
+                  <div>
+                    <h4 className="text-sm font-medium">{presets.thumbsUp.name}</h4>
+                    <p className="text-xs text-muted-foreground">{presets.thumbsUp.description}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Mood & Atmosphere</label>
+                    <Input
+                      value={presets.thumbsUp.parameters['aesthetics.mood_atmosphere'] || ''}
+                      onChange={(e) => handlePresetParameterChange('thumbsUp', 'aesthetics.mood_atmosphere', e.target.value)}
+                      placeholder="e.g., bright, optimistic"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Color Scheme</label>
+                    <Input
+                      value={presets.thumbsUp.parameters['aesthetics.color_scheme'] || ''}
+                      onChange={(e) => handlePresetParameterChange('thumbsUp', 'aesthetics.color_scheme', e.target.value)}
+                      placeholder="e.g., warm, vibrant"
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Rock Sign Preset */}
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🤘</span>
+                  <div>
+                    <h4 className="text-sm font-medium">{presets.rock.name}</h4>
+                    <p className="text-xs text-muted-foreground">{presets.rock.description}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Mood & Atmosphere</label>
+                    <Input
+                      value={presets.rock.parameters['aesthetics.mood_atmosphere'] || ''}
+                      onChange={(e) => handlePresetParameterChange('rock', 'aesthetics.mood_atmosphere', e.target.value)}
+                      placeholder="e.g., edgy, bold"
+                      className="text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Shadows</label>
+                    <Input
+                      value={presets.rock.parameters['lighting.shadows'] || ''}
+                      onChange={(e) => handlePresetParameterChange('rock', 'lighting.shadows', e.target.value)}
+                      placeholder="e.g., high contrast, dramatic shadows"
+                      className="text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Info Note */}
+              <div className="rounded-md bg-muted p-3">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Tip:</strong> Preset gestures provide quick style shortcuts. Hold the gesture for 1-2 seconds to apply the preset parameters to your prompt.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="advanced" className="space-y-6 py-4">
+            {/* HDR Output Mode Section */}
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium">HDR Output Mode</h3>
+                <p className="text-xs text-muted-foreground">
+                  Generate 16-bit color depth images for professional workflows
+                </p>
+              </div>
+
+              {/* HDR Toggle */}
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="hdr-mode" className="text-sm font-medium">
+                    Enable HDR Mode
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Request 16-bit color depth from Bria API
+                  </p>
+                </div>
+                <Switch
+                  id="hdr-mode"
+                  checked={hdrEnabled}
+                  onCheckedChange={setHdrEnabled}
+                />
+              </div>
+
+              {/* HDR Info */}
+              <div className="rounded-md bg-muted p-3 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  <strong>What is HDR Mode?</strong>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  HDR (High Dynamic Range) mode generates images with 16-bit color depth instead of standard 8-bit. 
+                  This provides a wider color gamut and more detail in highlights and shadows, ideal for professional 
+                  color grading and post-production workflows.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Note:</strong> HDR support depends on the Bria API. If HDR is not available, 
+                  the system will gracefully fall back to standard 8-bit generation.
+                </p>
+              </div>
+
+              {/* Export Format Info */}
+              {hdrEnabled && (
+                <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800 p-3">
+                  <p className="text-xs text-blue-900 dark:text-blue-100">
+                    <strong>Export Format:</strong> HDR images will be exported in 16-bit PNG format 
+                    to preserve the full color depth. Standard displays will show tone-mapped versions.
+                  </p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
         
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={handleCancel}>
@@ -370,6 +631,24 @@ export function getStoredApiKey(): string | null {
 export function updateConnectionStatus(status: 'connected' | 'disconnected'): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEY_CONNECTION_STATUS, status);
+}
+
+/**
+ * Utility function to get HDR mode setting
+ * Requirements: 16.1
+ */
+export function getHDREnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(STORAGE_KEY_HDR_ENABLED) === 'true';
+}
+
+/**
+ * Utility function to set HDR mode setting
+ * Requirements: 16.1
+ */
+export function setHDREnabled(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(STORAGE_KEY_HDR_ENABLED, String(enabled));
 }
 
 export default SettingsDialog;

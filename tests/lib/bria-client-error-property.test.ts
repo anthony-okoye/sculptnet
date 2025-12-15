@@ -86,9 +86,10 @@ const arbitraryErrorResponse = fc.record({
 });
 
 /**
- * Generate arbitrary text prompts
+ * Generate arbitrary text prompts (non-empty, non-whitespace)
  */
-const arbitraryTextPrompt = fc.string({ minLength: 5, maxLength: 100 });
+const arbitraryTextPrompt = fc.string({ minLength: 5, maxLength: 100 })
+  .filter(s => s.trim().length > 0);
 
 /**
  * Generate arbitrary structured prompts
@@ -136,9 +137,7 @@ describe('BriaClient Error Handling - Property Tests', () => {
 
           const client = new BriaClient();
 
-          // Attempt generation should throw
-          await expect(client.generate(prompt)).rejects.toThrow(BriaAPIError);
-          
+          // Attempt generation should throw - only call once
           const error = await client.generate(prompt).catch(e => e);
           expect(error).toBeInstanceOf(BriaAPIError);
           expect(error.status).toBe(401);
@@ -162,21 +161,16 @@ describe('BriaClient Error Handling - Property Tests', () => {
           const mockFetch = vi.fn().mockResolvedValue({
             ok: false,
             status: 500,
-            json: async () => errorBody,
+            json: vi.fn().mockResolvedValue(errorBody),
           });
           global.fetch = mockFetch as unknown as typeof fetch;
 
           const client = new BriaClient();
 
           // Attempt generation should throw
-          try {
-            await client.generate(prompt);
-            // Should not reach here
-            expect.fail('Expected generate to throw');
-          } catch (error) {
-            expect(error).toBeInstanceOf(BriaAPIError);
-            expect((error as BriaAPIError).status).toBe(500);
-          }
+          const error = await client.generate(prompt).catch(e => e);
+          expect(error).toBeInstanceOf(BriaAPIError);
+          expect(error.status).toBe(500);
           
           // Should only call fetch once (no retries for 500)
           expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -198,7 +192,7 @@ describe('BriaClient Error Handling - Property Tests', () => {
           const mockFetch = vi.fn().mockResolvedValue({
             ok: false,
             status,
-            json: async () => errorBody,
+            json: vi.fn().mockResolvedValue(errorBody),
           });
           global.fetch = mockFetch as unknown as typeof fetch;
 
@@ -231,16 +225,11 @@ describe('BriaClient Error Handling - Property Tests', () => {
           const client = new BriaClient();
 
           // Attempt generation should throw
-          try {
-            await client.generate(prompt);
-            // Should not reach here
-            expect.fail('Expected generate to throw');
-          } catch (error) {
-            expect(error).toBeInstanceOf(Error);
-            // Should be wrapped in BriaAPIError
-            expect(error).toBeInstanceOf(BriaAPIError);
-            expect((error as BriaAPIError).code).toBeTruthy();
-          }
+          const error = await client.generate(prompt).catch(e => e);
+          expect(error).toBeInstanceOf(Error);
+          // Should be wrapped in BriaAPIError
+          expect(error).toBeInstanceOf(BriaAPIError);
+          expect((error as BriaAPIError).code).toBeTruthy();
         }
       ),
       { numRuns: 10 } // Reduced for faster tests

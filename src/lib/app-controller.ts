@@ -518,7 +518,17 @@ export class AppController {
 
     try {
       const prompt = this.jsonStateManager.getPrompt();
-      const result = await this.briaClient.generate(prompt);
+      
+      // Get HDR setting from localStorage
+      // Requirements: 16.1 - Add HDR-related parameters to API request
+      const hdrEnabled = typeof window !== 'undefined' 
+        ? localStorage.getItem('sculptnet_hdr_enabled') === 'true'
+        : false;
+      
+      const result = await this.briaClient.generate(prompt, {
+        hdr: hdrEnabled,
+        color_depth: hdrEnabled ? 16 : 8,
+      });
 
       this.lastGenerationTime = Date.now();
       this.isGenerating = false;

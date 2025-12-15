@@ -16,6 +16,13 @@ import { GestureMapper, type GestureUpdate } from '@/lib/gesture-mapper';
 import { usePromptStore } from '@/lib/stores/prompt-store';
 import { getBriaClient, type GenerationResult, type GenerationStatus } from '@/lib/bria-client';
 import { WebcamManager } from '@/lib/webcam-manager';
+import { 
+  GesturePresetDetector, 
+  type PresetDetectionResult,
+  type PresetGestureType,
+  loadPresetsFromStorage,
+} from '@/lib/gesture-presets';
+import { toast } from 'sonner';
 
 // ============ Types ============
 
@@ -34,6 +41,8 @@ export interface GestureControllerState {
   lastUpdate: GestureUpdate | null;
   /** Whether generation is in progress */
   isGenerating: boolean;
+  /** Currently detected preset gesture */
+  currentPreset: PresetGestureType;
 }
 
 export interface GestureControllerOptions {
@@ -47,6 +56,10 @@ export interface GestureControllerOptions {
   onGenerationError?: (error: Error) => void;
   /** Callback when a gesture update is applied */
   onGestureUpdate?: (update: GestureUpdate) => void;
+  /** Callback when a preset gesture is detected */
+  onPresetDetected?: (preset: PresetDetectionResult) => void;
+  /** Enable preset gesture detection (default true) */
+  enablePresets?: boolean;
 }
 
 export interface GestureController {
@@ -91,6 +104,8 @@ export function useGestureController(
     onImageGenerated,
     onGenerationError,
     onGestureUpdate,
+    onPresetDetected,
+    enablePresets = true,
   } = options;
 
   // State
@@ -102,13 +117,19 @@ export function useGestureController(
     currentGesture: null,
     lastUpdate: null,
     isGenerating: false,
+    currentPreset: null,
   });
 
   // Refs for instances (persist across renders)
   const webcamManagerRef = useRef<WebcamManager | null>(null);
   const handTrackerRef = useRef<HandTracker | null>(null);
   const gestureMapperRef = useRef<GestureMapper | null>(null);
+  const presetDetectorRef = useRef<GesturePresetDetector | null>(null);
   const briaClientRef = useRef(getBriaClient());
+  
+  // Ref to track last detected preset to avoid duplicate toasts
+  const lastPresetRef = useRef<PresetGestureType>(null);
+  const presetCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Refs for debouncing
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -161,6 +182,29 @@ export function useGestureController(
   }, [debounceMs, applyDebouncedUpdates]);
 
   /**
+   * Apply preset gesture parameters to prompt
+   */
+  const applyPreset = useCallback((preset: PresetDetectionResult) => {
+    if (!preset.preset) return;
+
+    // Apply all preset parameters
+    Object.entries(preset.preset.parameters).forEach(([path, value]) => {
+      if (value !== undefined) {
+        updatePrompt(path, value);
+      }
+    });
+
+    // Show toast notification (Requirement 15.4)
+    toast.success(`${preset.preset.name} preset applied`, {
+      description: preset.preset.description,
+      duration: 2000,
+    });
+
+    // Callback
+    onPresetDetected?.(preset);
+  }, [updatePrompt, onPresetDetected]);
+
+  /**
    * Handle hand detection results
    */
   const handleDetectionResults = useCallback((results: HandDetectionResult[]) => {
@@ -171,14 +215,56 @@ export function useGestureController(
 
     if (results.length === 0) {
       // No hands detected - maintain current state (Requirement 3.4)
-      setState(prev => ({ ...prev, currentGesture: gestureDescription }));
+      setState(prev => ({ ...prev, currentGesture: gestureDescription, currentPreset: null }));
       previousLandmarksRef.current = null;
+      lastPresetRef.current = null;
       return;
     }
 
     // Process single hand gestures
     const primaryHand = results[0];
     const landmarks = primaryHand.landmarks;
+
+    // Check for preset gestures first (if enabled)
+    if (enablePresets && presetDetectorRef.current) {
+      const presetResult = presetDetectorRef.current.detectPresetGesture(landmarks);
+      
+      if (presetResult.type !== null) {
+        // Preset gesture detected
+        gestureDescription = `Preset: ${presetResult.preset?.name || presetResult.type}`;
+        
+        // Apply preset if it's different from the last one (avoid repeated applications)
+        if (presetResult.type !== lastPresetRef.current) {
+          lastPresetRef.current = presetResult.type;
+          
+          // Clear cooldown timer
+          if (presetCooldownRef.current) {
+            clearTimeout(presetCooldownRef.current);
+          }
+          
+          // Apply preset
+          applyPreset(presetResult);
+          
+          // Set cooldown to prevent rapid re-application (2 seconds)
+          presetCooldownRef.current = setTimeout(() => {
+            lastPresetRef.current = null;
+          }, 2000);
+        }
+        
+        setState(prev => ({ 
+          ...prev, 
+          currentGesture: gestureDescription,
+          currentPreset: presetResult.type,
+        }));
+        
+        // Store current results for next frame comparison
+        previousLandmarksRef.current = results;
+        return;
+      } else {
+        // No preset detected, clear preset state
+        setState(prev => ({ ...prev, currentPreset: null }));
+      }
+    }
 
     // Check for generation trigger (fist-to-open)
     const previousLandmarks = previousLandmarksRef.current?.[0]?.landmarks;
@@ -234,7 +320,7 @@ export function useGestureController(
 
     // Store current results for next frame comparison
     previousLandmarksRef.current = results;
-  }, [queueUpdate]);
+  }, [queueUpdate, enablePresets, applyPreset]);
 
   /**
    * Internal trigger generation function
@@ -300,6 +386,10 @@ export function useGestureController(
       webcamManagerRef.current = new WebcamManager();
       handTrackerRef.current = new HandTracker();
       gestureMapperRef.current = new GestureMapper();
+      
+      // Create preset detector with custom presets from storage (if available)
+      const customPresets = loadPresetsFromStorage();
+      presetDetectorRef.current = new GesturePresetDetector(customPresets || undefined);
 
       // Initialize webcam
       await webcamManagerRef.current.initialize();
@@ -418,6 +508,12 @@ export function useGestureController(
   const dispose = useCallback(() => {
     stopDetection();
     
+    // Clear preset cooldown timer
+    if (presetCooldownRef.current) {
+      clearTimeout(presetCooldownRef.current);
+      presetCooldownRef.current = null;
+    }
+    
     // Dispose hand tracker
     handTrackerRef.current?.dispose();
     handTrackerRef.current = null;
@@ -428,6 +524,10 @@ export function useGestureController(
 
     // Clear gesture mapper
     gestureMapperRef.current = null;
+    
+    // Clear preset detector
+    presetDetectorRef.current = null;
+    lastPresetRef.current = null;
 
     // Cancel any ongoing generation
     briaClientRef.current.cancel();
@@ -440,6 +540,7 @@ export function useGestureController(
       currentGesture: null,
       lastUpdate: null,
       isGenerating: false,
+      currentPreset: null,
     });
   }, [stopDetection]);
 
