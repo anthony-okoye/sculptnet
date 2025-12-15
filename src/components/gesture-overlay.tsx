@@ -5,13 +5,16 @@
  * 
  * Displays gesture detection status and loading spinner during generation.
  * Shows current gesture, parameter updates, and generation progress.
+ * Integrates pose capture indicator for freeze frame feature.
  * 
- * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.1
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 3.1, 3.5, 4.1
  */
 
 import { Badge } from '@/components/ui/badge';
 import type { GestureUpdate } from '@/lib/gesture-mapper';
 import type { GenerationStatus } from '@/lib/bria-client';
+import { ConnectedPoseCaptureIndicator } from '@/components/pose-capture-indicator';
+import { ConnectedCompactPoseIndicator } from '@/components/pose-status-badge';
 
 export interface GestureOverlayProps {
   /** Whether gesture detection is active */
@@ -28,6 +31,12 @@ export interface GestureOverlayProps {
   error: string | null;
   /** Custom class name */
   className?: string;
+  /** Whether pose is currently stable (for pose capture indicator) */
+  isPoseStable?: boolean;
+  /** Hold duration for pose capture (default 2 seconds) */
+  poseHoldDuration?: number;
+  /** Callback when pose is cleared */
+  onPoseCleared?: () => void;
 }
 
 /**
@@ -157,7 +166,9 @@ function ErrorDisplay({ error }: { error: string }) {
  * Gesture Overlay Component
  * 
  * Displays gesture detection status, loading spinner during generation,
- * and current parameter updates.
+ * current parameter updates, and pose capture indicator.
+ * 
+ * Requirements: 3.1, 3.5
  */
 export function GestureOverlay({
   isDetecting,
@@ -167,6 +178,9 @@ export function GestureOverlay({
   lastUpdate,
   error,
   className = '',
+  isPoseStable = false,
+  poseHoldDuration = 2,
+  onPoseCleared,
 }: GestureOverlayProps) {
   return (
     <div className={`absolute inset-0 pointer-events-none ${className}`}>
@@ -175,9 +189,19 @@ export function GestureOverlay({
         <GenerationProgress status={generationStatus} />
       )}
 
+      {/* Pose Capture Indicator - Center of screen (Requirements: 3.1) */}
+      <ConnectedPoseCaptureIndicator
+        isStable={isPoseStable}
+        holdDuration={poseHoldDuration}
+      />
+
       {/* Top-left: Gesture Status - Responsive positioning */}
       <div className="absolute top-2 sm:top-4 left-2 sm:left-4 z-10">
-        <GestureStatusBadge gesture={currentGesture} isDetecting={isDetecting} />
+        <div className="flex items-center gap-2">
+          <GestureStatusBadge gesture={currentGesture} isDetecting={isDetecting} />
+          {/* Pose Status Badge (Requirements: 3.5) */}
+          <ConnectedCompactPoseIndicator onCleared={onPoseCleared} />
+        </div>
       </div>
 
       {/* Top-right: Parameter Update - Responsive positioning */}

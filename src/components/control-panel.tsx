@@ -32,6 +32,8 @@ import {
   Grid3x3,
   ChevronDown,
   ChevronUp,
+  Camera,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,6 +58,8 @@ import {
 import { PromptEditor } from '@/components/prompt-editor';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { usePromptStore } from '@/lib/stores/prompt-store';
+import { usePoseCaptureStore } from '@/lib/stores/pose-capture-store';
+import { Badge } from '@/components/ui/badge';
 
 // ============ Types ============
 
@@ -90,6 +94,92 @@ export interface ControlPanelProps {
   
   // Optional customization
   className?: string;
+}
+
+// ============ Pose Status Section ============
+
+/**
+ * Pose Status Section Component
+ * 
+ * Displays current pose status with thumbnail and clear button.
+ * Requirements: 4.2, 4.3
+ */
+function PoseStatusSection() {
+  const { capturedPose, clear } = usePoseCaptureStore();
+  
+  const handleClearPose = () => {
+    clear();
+  };
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs sm:text-sm font-medium text-zinc-400">Pose Reference</h3>
+      
+      {capturedPose ? (
+        // Pose is active - show status with thumbnail and clear button
+        <div className="flex items-start gap-3 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+          {/* Pose Thumbnail */}
+          <div className="shrink-0">
+            {capturedPose.thumbnail ? (
+              <img
+                src={capturedPose.thumbnail}
+                alt="Captured pose"
+                className="w-12 h-12 rounded object-cover border border-zinc-600"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded bg-zinc-700 flex items-center justify-center border border-zinc-600">
+                <Camera className="w-5 h-5 text-zinc-400" />
+              </div>
+            )}
+          </div>
+          
+          {/* Pose Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge 
+                variant="default" 
+                className="bg-green-600/80 text-white text-xs px-1.5 py-0 h-auto"
+              >
+                Active
+              </Badge>
+            </div>
+            <p className="text-xs text-zinc-300 line-clamp-2">
+              {capturedPose.descriptor || 'Pose captured'}
+            </p>
+          </div>
+          
+          {/* Clear Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleClearPose}
+            className="shrink-0 h-8 w-8 hover:bg-zinc-700"
+            aria-label="Clear captured pose"
+          >
+            <X className="w-4 h-4 text-zinc-400" />
+          </Button>
+        </div>
+      ) : (
+        // No pose captured - show inactive status
+        <div className="flex items-center gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
+          <div className="w-12 h-12 rounded bg-zinc-700/50 flex items-center justify-center border border-zinc-600/50">
+            <Camera className="w-5 h-5 text-zinc-500" />
+          </div>
+          <div className="flex-1">
+            <Badge 
+              variant="secondary" 
+              className="bg-zinc-700 text-zinc-400 text-xs px-1.5 py-0 h-auto mb-1"
+            >
+              None
+            </Badge>
+            <p className="text-xs text-zinc-500">
+              Hold a pose for 2 seconds to capture
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ============ Component ============
@@ -455,6 +545,12 @@ export function ControlPanel({
             </div>
           )}
         </div>
+
+        {/* Divider */}
+        <div className="border-t border-zinc-800 my-4" />
+
+        {/* Pose Status Section - Requirements: 4.2, 4.3 */}
+        <PoseStatusSection />
 
         {/* Divider */}
         <div className="border-t border-zinc-800 my-4" />

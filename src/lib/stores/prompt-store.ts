@@ -6,8 +6,9 @@
  * - Zod schema validation
  * - Revert-on-validation-failure logic
  * - Export/import functionality
+ * - Pose descriptor injection for captured poses
  * 
- * Requirements: 5.1, 5.2, 5.3, 5.4
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 2.2, 2.4
  */
 
 import { create } from 'zustand';
@@ -17,6 +18,7 @@ import {
   DEFAULT_FIBO_PROMPT,
   validateFIBOPrompt,
 } from '@/types/fibo';
+import { usePoseCaptureStore } from './pose-capture-store';
 
 // ============ Types ============
 
@@ -53,6 +55,8 @@ export interface PromptActions {
   update: (path: string, value: unknown) => UpdateResult;
   /** Get the current prompt */
   getPrompt: () => FIBOStructuredPrompt;
+  /** Get the prompt with pose descriptor injected (if pose exists) */
+  getPoseEnhancedPrompt: () => FIBOStructuredPrompt;
   /** Validate the current prompt */
   validate: () => ValidationResult;
   /** Reset to default prompt */
@@ -268,6 +272,44 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   },
 
   /**
+   * Get the prompt with pose descriptor injected into composition/orientation fields
+   * When a pose is captured, injects the descriptor into aesthetics.composition
+   * and objects[0].orientation. When no pose exists, returns the default prompt.
+   * 
+   * Requirements: 2.2, 2.4
+   */
+  getPoseEnhancedPrompt: (): FIBOStructuredPrompt => {
+    const prompt = get().prompt;
+    const poseDescriptor = usePoseCaptureStore.getState().getDescriptor();
+    
+    // If no pose captured, return default prompt (Requirements: 2.4)
+    if (!poseDescriptor) {
+      return prompt;
+    }
+    
+    // Inject pose descriptor into composition and orientation fields (Requirements: 2.2)
+    const enhancedPrompt: FIBOStructuredPrompt = {
+      ...prompt,
+      aesthetics: {
+        ...prompt.aesthetics,
+        composition: `${prompt.aesthetics.composition}, subject ${poseDescriptor}`,
+      },
+      objects: prompt.objects.map((obj, index) => {
+        if (index === 0) {
+          // Inject into primary object's orientation
+          return {
+            ...obj,
+            orientation: poseDescriptor,
+          };
+        }
+        return obj;
+      }),
+    };
+    
+    return enhancedPrompt;
+  },
+
+  /**
    * Validate the current prompt
    */
   validate: (): ValidationResult => {
@@ -421,6 +463,39 @@ export class JSONStateManager {
 
   getPrompt(): FIBOStructuredPrompt {
     return this.prompt;
+  }
+
+  /**
+   * Get the prompt with pose descriptor injected
+   * For standalone usage, accepts an optional pose descriptor parameter
+   * 
+   * Requirements: 2.2, 2.4
+   */
+  getPoseEnhancedPrompt(poseDescriptor?: string | null): FIBOStructuredPrompt {
+    // If no pose descriptor provided, return default prompt (Requirements: 2.4)
+    if (!poseDescriptor) {
+      return this.prompt;
+    }
+    
+    // Inject pose descriptor into composition and orientation fields (Requirements: 2.2)
+    const enhancedPrompt: FIBOStructuredPrompt = {
+      ...this.prompt,
+      aesthetics: {
+        ...this.prompt.aesthetics,
+        composition: `${this.prompt.aesthetics.composition}, subject ${poseDescriptor}`,
+      },
+      objects: this.prompt.objects.map((obj, index) => {
+        if (index === 0) {
+          return {
+            ...obj,
+            orientation: poseDescriptor,
+          };
+        }
+        return obj;
+      }),
+    };
+    
+    return enhancedPrompt;
   }
 
   validate(): ValidationResult {

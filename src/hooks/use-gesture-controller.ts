@@ -6,6 +6,7 @@
  * - Passes gesture updates from GestureMapper to PromptStore
  * - Implements 100ms debounce on parameter updates to avoid jitter
  * - Triggers image generation on fist-to-open gesture
+ * - Integrates PoseStabilityDetector for freeze frame pose capture
  * 
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.1
  */
@@ -22,6 +23,9 @@ import {
   type PresetGestureType,
   loadPresetsFromStorage,
 } from '@/lib/gesture-presets';
+import { PoseStabilityDetector, type StabilityState } from '@/lib/pose-stability-detector';
+import { usePoseCaptureStore } from '@/lib/stores/pose-capture-store';
+import { landmarksToDescriptor } from '@/lib/pose-descriptor-generator';
 import { toast } from 'sonner';
 
 // ============ Types ============
@@ -43,6 +47,10 @@ export interface GestureControllerState {
   isGenerating: boolean;
   /** Currently detected preset gesture */
   currentPreset: PresetGestureType;
+  /** Current pose stability state */
+  poseStability: StabilityState | null;
+  /** Whether pose is currently stable */
+  isPoseStable: boolean;
 }
 
 export interface GestureControllerOptions {
@@ -60,6 +68,12 @@ export interface GestureControllerOptions {
   onPresetDetected?: (preset: PresetDetectionResult) => void;
   /** Enable preset gesture detection (default true) */
   enablePresets?: boolean;
+  /** Enable pose capture detection (default true) */
+  enablePoseCapture?: boolean;
+  /** Callback when a pose is captured */
+  onPoseCaptured?: (descriptor: string) => void;
+  /** Callback when pose stability changes */
+  onPoseStabilityChange?: (stability: StabilityState) => void;
 }
 
 export interface GestureController {
@@ -106,6 +120,9 @@ export function useGestureController(
     onGestureUpdate,
     onPresetDetected,
     enablePresets = true,
+    enablePoseCapture = true,
+    onPoseCaptured,
+    onPoseStabilityChange,
   } = options;
 
   // State
@@ -118,6 +135,8 @@ export function useGestureController(
     lastUpdate: null,
     isGenerating: false,
     currentPreset: null,
+    poseStability: null,
+    isPoseStable: false,
   });
 
   // Refs for instances (persist across renders)
@@ -125,6 +144,7 @@ export function useGestureController(
   const handTrackerRef = useRef<HandTracker | null>(null);
   const gestureMapperRef = useRef<GestureMapper | null>(null);
   const presetDetectorRef = useRef<GesturePresetDetector | null>(null);
+  const poseStabilityDetectorRef = useRef<PoseStabilityDetector | null>(null);
   const briaClientRef = useRef(getBriaClient());
   
   // Ref to prevent duplicate generation calls (React Strict Mode double-render)
@@ -140,11 +160,19 @@ export function useGestureController(
   
   // Refs for previous detection state
   const previousLandmarksRef = useRef<HandDetectionResult[] | null>(null);
+  
+  // Ref to track if pose was just captured (to avoid re-triggering)
+  const poseCapturedRef = useRef(false);
 
   // Get prompt store actions
   const updatePrompt = usePromptStore(state => state.update);
   const getPrompt = usePromptStore(state => state.getPrompt);
   const initializePrompt = usePromptStore(state => state.initialize);
+  
+  // Get pose capture store actions
+  const capturePose = usePoseCaptureStore(state => state.capture);
+  const setHoldProgress = usePoseCaptureStore(state => state.setHoldProgress);
+  const setIsCapturing = usePoseCaptureStore(state => state.setIsCapturing);
 
   /**
    * Apply debounced updates to the prompt store
@@ -208,6 +236,41 @@ export function useGestureController(
   }, [updatePrompt, onPresetDetected]);
 
   /**
+   * Handle pose capture when stability threshold is reached
+   * Requirements: 1.1, 1.4
+   */
+  const handlePoseCapture = useCallback((landmarks: HandDetectionResult[]) => {
+    if (poseCapturedRef.current) return; // Prevent duplicate captures
+    
+    const allLandmarks = landmarks.flatMap(r => r.landmarks);
+    const descriptor = landmarksToDescriptor(allLandmarks);
+    
+    // Capture the pose
+    capturePose(allLandmarks, descriptor);
+    poseCapturedRef.current = true;
+    
+    // Provide haptic feedback (Requirement 1.4)
+    if (navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]); // Double pulse for capture confirmation
+    }
+    
+    // Show toast notification
+    toast.success('Pose Captured!', {
+      description: descriptor,
+      duration: 2000,
+    });
+    
+    // Callback
+    onPoseCaptured?.(descriptor);
+    
+    // Reset capture flag after cooldown
+    setTimeout(() => {
+      poseCapturedRef.current = false;
+      poseStabilityDetectorRef.current?.reset();
+    }, 2000);
+  }, [capturePose, onPoseCaptured]);
+
+  /**
    * Handle hand detection results
    */
   const handleDetectionResults = useCallback((results: HandDetectionResult[]) => {
@@ -218,9 +281,22 @@ export function useGestureController(
 
     if (results.length === 0) {
       // No hands detected - maintain current state (Requirement 3.4)
-      setState(prev => ({ ...prev, currentGesture: gestureDescription, currentPreset: null }));
+      setState(prev => ({ 
+        ...prev, 
+        currentGesture: gestureDescription, 
+        currentPreset: null,
+        poseStability: null,
+        isPoseStable: false,
+      }));
       previousLandmarksRef.current = null;
       lastPresetRef.current = null;
+      
+      // Reset pose stability detector when no hands
+      if (enablePoseCapture && poseStabilityDetectorRef.current) {
+        poseStabilityDetectorRef.current.reset();
+        setHoldProgress(0);
+        setIsCapturing(false);
+      }
       return;
     }
 
@@ -321,9 +397,37 @@ export function useGestureController(
       setState(prev => ({ ...prev, currentGesture: gestureDescription }));
     }
 
+    // Pose stability detection (Requirements: 1.1, 1.2, 1.3)
+    if (enablePoseCapture && poseStabilityDetectorRef.current && !poseCapturedRef.current) {
+      // Combine all landmarks from all detected hands
+      const allLandmarks = results.flatMap(r => r.landmarks);
+      
+      // Update pose stability detector
+      const stabilityState = poseStabilityDetectorRef.current.update(allLandmarks);
+      
+      // Update pose capture store with progress
+      setHoldProgress(stabilityState.holdProgress);
+      setIsCapturing(stabilityState.isStable);
+      
+      // Update state with stability info
+      setState(prev => ({
+        ...prev,
+        poseStability: stabilityState,
+        isPoseStable: stabilityState.isStable,
+      }));
+      
+      // Callback for stability changes
+      onPoseStabilityChange?.(stabilityState);
+      
+      // Check if capture should be triggered (holdProgress reached 1.0)
+      if (poseStabilityDetectorRef.current.shouldCapture()) {
+        handlePoseCapture(results);
+      }
+    }
+
     // Store current results for next frame comparison
     previousLandmarksRef.current = results;
-  }, [queueUpdate, enablePresets, applyPreset]);
+  }, [queueUpdate, enablePresets, applyPreset, enablePoseCapture, setHoldProgress, setIsCapturing, onPoseStabilityChange, handlePoseCapture]);
 
   /**
    * Internal trigger generation function
@@ -408,6 +512,15 @@ export function useGestureController(
       // Create preset detector with custom presets from storage (if available)
       const customPresets = loadPresetsFromStorage();
       presetDetectorRef.current = new GesturePresetDetector(customPresets || undefined);
+      
+      // Create pose stability detector for freeze frame capture (Requirements: 1.1, 1.2, 1.3)
+      if (enablePoseCapture) {
+        poseStabilityDetectorRef.current = new PoseStabilityDetector({
+          stabilityThreshold: 0.02,  // Max movement variance
+          holdDuration: 2,           // 2 seconds to capture
+          windowSize: 30,            // 30 frames sliding window
+        });
+      }
 
       // Initialize webcam
       await webcamManagerRef.current.initialize();
@@ -508,7 +621,13 @@ export function useGestureController(
   const reset = useCallback(() => {
     stopDetection();
     gestureMapperRef.current?.reset();
+    poseStabilityDetectorRef.current?.reset();
     previousLandmarksRef.current = null;
+    poseCapturedRef.current = false;
+    
+    // Reset pose capture store
+    setHoldProgress(0);
+    setIsCapturing(false);
     
     setState(prev => ({
       ...prev,
@@ -517,8 +636,10 @@ export function useGestureController(
       lastUpdate: null,
       generationStatus: 'idle',
       isGenerating: false,
+      poseStability: null,
+      isPoseStable: false,
     }));
-  }, [stopDetection]);
+  }, [stopDetection, setHoldProgress, setIsCapturing]);
 
   /**
    * Dispose of all resources
@@ -546,6 +667,10 @@ export function useGestureController(
     // Clear preset detector
     presetDetectorRef.current = null;
     lastPresetRef.current = null;
+    
+    // Clear pose stability detector
+    poseStabilityDetectorRef.current = null;
+    poseCapturedRef.current = false;
 
     // Cancel any ongoing generation
     briaClientRef.current.cancel();
@@ -559,6 +684,8 @@ export function useGestureController(
       lastUpdate: null,
       isGenerating: false,
       currentPreset: null,
+      poseStability: null,
+      isPoseStable: false,
     });
   }, [stopDetection]);
 
