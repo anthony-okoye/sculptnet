@@ -244,6 +244,9 @@ export class BriaClient {
       }
 
       // Make request with retry logic for rate limits
+      console.log('[SculptNet] 📤 Sending request to /api/generate...');
+      console.log('[SculptNet] 📋 Request body:', JSON.stringify(body, null, 2));
+      
       const response = await this.fetchWithRetry('/api/generate', {
         method: 'POST',
         headers,
@@ -251,9 +254,12 @@ export class BriaClient {
         signal: this.abortController.signal,
       });
 
+      console.log('[SculptNet] 📬 Received response from /api/generate');
+      console.log('[SculptNet] 📊 Response status:', response.status, response.statusText);
+      
       const data = await response.json() as GenerateResponse;
 
-      console.log('[SculptNet] 📬 Received response from Bria API');
+      console.log('[SculptNet] 📬 Parsed response data:', data);
       console.log('[SculptNet] 🆔 Request ID:', data.request_id);
       console.log('[SculptNet] 🔗 Status URL:', data.status_url);
 
@@ -472,13 +478,19 @@ export class BriaClient {
   ): Promise<Response> {
     let lastError: Error | null = null;
     
+    console.log(`[SculptNet] 🔄 fetchWithRetry: ${url}`);
+    
     for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
       try {
+        console.log(`[SculptNet] 🔄 Attempt ${attempt + 1}/${MAX_RETRY_ATTEMPTS}`);
         const response = await fetch(url, options);
+        
+        console.log(`[SculptNet] 📡 Response received: ${response.status} ${response.statusText}`);
         
         // Check for rate limit
         if (response.status === 429) {
           const delay = this.calculateBackoffDelay(attempt);
+          console.log(`[SculptNet] ⏳ Rate limited, waiting ${delay}ms before retry...`);
           await this.sleep(delay);
           continue;
         }
@@ -486,6 +498,7 @@ export class BriaClient {
         // Check for other errors
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({})) as APIError;
+          console.error(`[SculptNet] ❌ HTTP Error ${response.status}:`, errorData);
           throw new BriaAPIError(
             errorData.error || `HTTP ${response.status}`,
             errorData.code || 'HTTP_ERROR',
@@ -494,6 +507,7 @@ export class BriaClient {
           );
         }
         
+        console.log(`[SculptNet] ✅ Request successful`);
         return response;
         
       } catch (error) {
