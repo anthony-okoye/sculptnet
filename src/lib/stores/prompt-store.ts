@@ -183,8 +183,16 @@ export const usePromptStore = create<PromptStore>((set, get) => ({
   /**
    * Initialize the store with a base prompt
    * Merges provided values with defaults
+   * Only initializes if not already initialized to preserve user changes
    */
   initialize: (basePrompt?: Partial<FIBOStructuredPrompt>) => {
+    const state = get();
+    
+    // Don't re-initialize if already initialized (preserves user changes)
+    if (state.initialized) {
+      return;
+    }
+    
     const mergedPrompt = basePrompt 
       ? deepMerge(DEFAULT_FIBO_PROMPT, basePrompt)
       : DEFAULT_FIBO_PROMPT;

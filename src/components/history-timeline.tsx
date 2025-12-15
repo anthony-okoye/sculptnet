@@ -12,12 +12,19 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGenerationStore } from '@/lib/stores/generation-store';
 import { usePromptStore } from '@/lib/stores/prompt-store';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   Tooltip,
   TooltipContent,
@@ -32,6 +39,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ColorDepthIndicator } from '@/components/color-depth-indicator';
@@ -122,6 +130,8 @@ export function HistoryTimeline() {
   const restorePrompt = usePromptStore((state) => state.restorePrompt);
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [selectedEntry, setSelectedEntry] = useState<GenerationHistoryEntry | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Load timeline from localStorage on mount
   useEffect(() => {
@@ -135,10 +145,17 @@ export function HistoryTimeline() {
     }
   }, [timeline.length]);
   
-  // Handle thumbnail click - restore prompt state
+  // Handle thumbnail click - open full view modal
   const handleThumbnailClick = (entry: GenerationHistoryEntry) => {
-    if (entry.prompt && typeof entry.prompt !== 'string') {
-      restorePrompt(entry.prompt);
+    setSelectedEntry(entry);
+    setIsModalOpen(true);
+  };
+  
+  // Handle restore prompt from modal
+  const handleRestorePrompt = () => {
+    if (selectedEntry?.prompt && typeof selectedEntry.prompt !== 'string') {
+      restorePrompt(selectedEntry.prompt);
+      setIsModalOpen(false);
     }
   };
   
@@ -160,56 +177,157 @@ export function HistoryTimeline() {
   }
   
   return (
-    <Card className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90vw] max-w-4xl bg-background/95 backdrop-blur-md border-2 z-40">
-      <div className="flex items-center gap-2 p-3">
-        {/* Scroll Left Button */}
-        <Button
-          onClick={scrollLeft}
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 shrink-0"
-          aria-label="Scroll left"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        
-        {/* Timeline Container */}
-        <div
-          ref={scrollContainerRef}
-          className="flex gap-3 overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent py-2 px-1"
-          style={{ scrollbarWidth: 'thin' }}
-        >
-          {timeline.map((entry, index) => {
-            const previousEntry = index > 0 ? timeline[index - 1] : null;
-            const diffs = previousEntry && 
-                         entry.prompt && typeof entry.prompt !== 'string' && 
-                         previousEntry.prompt && typeof previousEntry.prompt !== 'string'
-              ? calculateDiff(entry.prompt, previousEntry.prompt)
-              : [];
-            
-            return (
-              <TimelineItem
-                key={entry.id}
-                entry={entry}
-                diffs={diffs}
-                onClick={() => handleThumbnailClick(entry)}
-              />
-            );
-          })}
+    <>
+      <Card className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90vw] max-w-4xl bg-background/95 backdrop-blur-md border-2 z-40">
+        <div className="flex items-center gap-2 p-3">
+          {/* Scroll Left Button */}
+          <Button
+            onClick={scrollLeft}
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 shrink-0"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          {/* Timeline Container */}
+          <div
+            ref={scrollContainerRef}
+            className="flex gap-3 overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent py-2 px-1"
+            style={{ scrollbarWidth: 'thin' }}
+          >
+            {timeline.map((entry, index) => {
+              const previousEntry = index > 0 ? timeline[index - 1] : null;
+              const diffs = previousEntry && 
+                           entry.prompt && typeof entry.prompt !== 'string' && 
+                           previousEntry.prompt && typeof previousEntry.prompt !== 'string'
+                ? calculateDiff(entry.prompt, previousEntry.prompt)
+                : [];
+              
+              return (
+                <TimelineItem
+                  key={entry.id}
+                  entry={entry}
+                  diffs={diffs}
+                  onClick={() => handleThumbnailClick(entry)}
+                />
+              );
+            })}
+          </div>
+          
+          {/* Scroll Right Button */}
+          <Button
+            onClick={scrollRight}
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 shrink-0"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-        
-        {/* Scroll Right Button */}
-        <Button
-          onClick={scrollRight}
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 shrink-0"
-          aria-label="Scroll right"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
-    </Card>
+      </Card>
+
+      {/* Full View Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Image Details</DialogTitle>
+            <DialogDescription>
+              {selectedEntry && new Date(selectedEntry.timestamp).toLocaleString()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedEntry && (
+            <div className="space-y-4">
+              {/* Full-size Image */}
+              <div className="relative w-full aspect-square bg-muted rounded-lg overflow-hidden">
+                {selectedEntry.thumbnail ? (
+                  <img
+                    src={selectedEntry.thumbnail}
+                    alt="Full view"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Sparkles className="h-16 w-16 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="font-semibold text-muted-foreground">Gesture</p>
+                  <p>{GESTURE_LABELS[selectedEntry.gesture || 'default'] || 'Unknown'}</p>
+                </div>
+                
+                {selectedEntry.colorDepth && (
+                  <div>
+                    <p className="font-semibold text-muted-foreground">Color Depth</p>
+                    <ColorDepthIndicator
+                      colorDepth={selectedEntry.colorDepth}
+                      isHDR={selectedEntry.isHDR}
+                      variant="full"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Prompt Parameters */}
+              {selectedEntry.prompt && typeof selectedEntry.prompt !== 'string' && (
+                <div className="space-y-2">
+                  <p className="font-semibold text-sm text-muted-foreground">Parameters</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="font-medium">Camera:</span>{' '}
+                      {selectedEntry.prompt.photographic_characteristics?.camera_angle || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Lens:</span>{' '}
+                      {selectedEntry.prompt.photographic_characteristics?.lens_focal_length || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Lighting:</span>{' '}
+                      {selectedEntry.prompt.lighting?.conditions || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Composition:</span>{' '}
+                      {selectedEntry.prompt.aesthetics?.composition || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Mood:</span>{' '}
+                      {selectedEntry.prompt.aesthetics?.mood_atmosphere || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-medium">Color Scheme:</span>{' '}
+                      {selectedEntry.prompt.aesthetics?.color_scheme || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 justify-end">
+                <Button
+                  onClick={() => setIsModalOpen(false)}
+                  variant="outline"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={handleRestorePrompt}
+                  variant="default"
+                >
+                  Restore Prompt
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

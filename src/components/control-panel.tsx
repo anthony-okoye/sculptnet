@@ -15,7 +15,7 @@
  * Requirements: 6.1, 7.4, 8.1, 9.1, 10.4
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Play, 
   Pause, 
@@ -35,6 +35,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +47,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PromptEditor } from '@/components/prompt-editor';
 import { SettingsDialog } from '@/components/settings-dialog';
+import { usePromptStore } from '@/lib/stores/prompt-store';
 
 // ============ Types ============
 
@@ -112,6 +115,31 @@ export function ControlPanel({
   className = '',
 }: ControlPanelProps) {
   const [activeTab, setActiveTab] = useState<'gesture' | 'manual'>('gesture');
+  
+  // Get prompt store for user input
+  const prompt = usePromptStore(state => state.prompt);
+  const updatePrompt = usePromptStore(state => state.update);
+  
+  // Local state for textarea
+  const [userPrompt, setUserPrompt] = useState(prompt.short_description);
+  
+  // Sync local state with prompt store when it changes (e.g., from history restore)
+  useEffect(() => {
+    setUserPrompt(prompt.short_description);
+  }, [prompt.short_description]);
+  
+  // Handle prompt input change
+  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setUserPrompt(value);
+    updatePrompt('short_description', value);
+  };
+  
+  // Prevent keyboard shortcuts when typing in textarea
+  const handlePromptKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Stop propagation to prevent keyboard shortcuts from firing
+    e.stopPropagation();
+  };
 
   // Wrap onGenerateNow with logging
   const handleGenerateClick = () => {
@@ -130,6 +158,28 @@ export function ControlPanel({
       </CardHeader>
       
       <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
+        {/* User Prompt Input - Always visible */}
+        <div className="space-y-2">
+          <Label htmlFor="user-prompt" className="text-xs sm:text-sm text-zinc-300">
+            Base Prompt
+          </Label>
+          <Textarea
+            id="user-prompt"
+            value={userPrompt}
+            onChange={handlePromptChange}
+            onKeyDown={handlePromptKeyDown}
+            placeholder="Enter your prompt (e.g., a beautiful landscape)"
+            className="w-full min-h-[88px] bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 resize-y"
+            rows={3}
+          />
+          <p className="text-xs text-zinc-500">
+            Gestures will modify this base prompt
+          </p>
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-zinc-800 my-4" />
+
         {/* Mode Tabs - Touch-friendly */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'gesture' | 'manual')}>
           <TabsList className="grid w-full grid-cols-2 h-11 sm:h-10">
