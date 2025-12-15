@@ -113,6 +113,13 @@ export function ControlPanel({
 }: ControlPanelProps) {
   const [activeTab, setActiveTab] = useState<'gesture' | 'manual'>('gesture');
 
+  // Wrap onGenerateNow with logging
+  const handleGenerateClick = () => {
+    console.log('[ControlPanel] 🖱️ Generate button clicked');
+    console.log('[ControlPanel] 📊 State:', { isInitialized, isGenerating });
+    onGenerateNow();
+  };
+
   return (
     <Card className={`bg-zinc-900 border-zinc-800 ${className}`}>
       <CardHeader className="p-3 sm:p-6">
@@ -175,7 +182,7 @@ export function ControlPanel({
 
             {/* Manual Generate Button */}
             <Button
-              onClick={onGenerateNow}
+              onClick={handleGenerateClick}
               className="w-full min-h-[44px] text-sm sm:text-base"
               variant="outline"
               size="lg"
@@ -204,7 +211,7 @@ export function ControlPanel({
 
             {/* Manual Generate Button */}
             <Button
-              onClick={onGenerateNow}
+              onClick={handleGenerateClick}
               className="w-full min-h-[44px] text-sm sm:text-base"
               variant="default"
               size="lg"

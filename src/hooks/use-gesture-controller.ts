@@ -127,6 +127,9 @@ export function useGestureController(
   const presetDetectorRef = useRef<GesturePresetDetector | null>(null);
   const briaClientRef = useRef(getBriaClient());
   
+  // Ref to prevent duplicate generation calls (React Strict Mode double-render)
+  const isGeneratingRef = useRef(false);
+  
   // Ref to track last detected preset to avoid duplicate toasts
   const lastPresetRef = useRef<PresetGestureType>(null);
   const presetCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -326,13 +329,20 @@ export function useGestureController(
    * Internal trigger generation function
    */
   const triggerGenerationInternal = useCallback(async () => {
-    // Prevent multiple simultaneous generations using setState callback
-    let shouldGenerate = false;
+    console.log('[SculptNet] 🎯 triggerGenerationInternal called');
+    
+    // Use ref to prevent race condition from React double-render
+    if (isGeneratingRef.current) {
+      console.log('[SculptNet] ⚠️ Already generating (ref check), skipping');
+      return null;
+    }
+    
+    isGeneratingRef.current = true;
+    console.log('[SculptNet] ✅ Setting isGeneratingRef to true');
+    
     setState(prev => {
-      if (prev.isGenerating) {
-        return prev; // Already generating, don't update
-      }
-      shouldGenerate = true;
+      console.log('[SculptNet] 📊 Current state:', prev);
+      console.log('[SculptNet] ✅ Setting state to generating');
       return { 
         ...prev, 
         isGenerating: true, 
@@ -341,23 +351,30 @@ export function useGestureController(
       };
     });
 
-    if (!shouldGenerate) return null;
-
     try {
+      console.log('[SculptNet] 📋 Getting prompt from store...');
       const prompt = getPrompt();
-      const result = await briaClientRef.current.generate(prompt);
+      console.log('[SculptNet] 📋 Prompt retrieved:', prompt);
       
+      console.log('[SculptNet] 🚀 Calling briaClient.generate()...');
+      const result = await briaClientRef.current.generate(prompt);
+      console.log('[SculptNet] ✅ Generation result received:', result);
+      
+      isGeneratingRef.current = false;
       setState(prev => ({ 
         ...prev, 
         isGenerating: false, 
         generationStatus: 'idle',
       }));
       
+      console.log('[SculptNet] 📢 Calling onImageGenerated callback...');
       onImageGenerated?.(result);
       return result;
     } catch (error) {
+      console.error('[SculptNet] ❌ Generation error caught:', error);
       const errorMessage = error instanceof Error ? error.message : 'Generation failed';
       
+      isGeneratingRef.current = false;
       setState(prev => ({ 
         ...prev, 
         isGenerating: false, 
@@ -366,6 +383,7 @@ export function useGestureController(
       }));
       
       if (error instanceof Error) {
+        console.log('[SculptNet] 📢 Calling onGenerationError callback...');
         onGenerationError?.(error);
       }
       return null;

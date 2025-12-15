@@ -210,7 +210,14 @@ export default function Home() {
 
   // Manual generation trigger
   const handleManualGenerate = useCallback(async () => {
-    await gestureController.triggerGeneration();
+    console.log('[SculptNet] 🎯 handleManualGenerate called');
+    console.log('[SculptNet] 📊 Gesture controller state:', gestureController.state);
+    try {
+      const result = await gestureController.triggerGeneration();
+      console.log('[SculptNet] ✅ Generation completed:', result);
+    } catch (error) {
+      console.error('[SculptNet] ❌ Generation failed:', error);
+    }
   }, [gestureController]);
 
   // Export handlers

@@ -78,8 +78,8 @@ export const FIBOStructuredPromptSchema = z.object({
   // Core description
   short_description: z.string().min(1, 'Short description is required'),
   
-  // Objects in the scene (optional array)
-  objects: z.array(SceneObjectSchema).optional(),
+  // Objects in the scene (REQUIRED by Bria API)
+  objects: z.array(SceneObjectSchema).min(1, 'At least one object is required'),
   
   // Environment
   background_setting: z.string().min(1, 'Background setting is required'),
@@ -100,8 +100,8 @@ export const FIBOStructuredPromptSchema = z.object({
   // Optional text rendering
   text_render: z.array(TextRenderSchema).optional(),
   
-  // Context
-  context: z.string().optional(),
+  // Context (REQUIRED by Bria API)
+  context: z.string().min(1, 'Context is required'),
 });
 
 /**
@@ -164,12 +164,26 @@ export const DEFAULT_PHOTOGRAPHIC_CHARACTERISTICS: PhotographicCharacteristics =
  */
 export const DEFAULT_FIBO_PROMPT: FIBOStructuredPrompt = {
   short_description: 'abstract sculpture in a studio setting',
+  objects: [
+    {
+      description: 'an abstract sculptural form with smooth, flowing curves',
+      location: 'center',
+      relationship: 'primary subject of the composition',
+      relative_size: 'large within frame',
+      shape_and_color: 'organic, flowing shape with neutral tones',
+      texture: 'smooth, polished surface',
+      appearance_details: 'modern, minimalist aesthetic with clean lines',
+      number_of_objects: 1,
+      orientation: 'upright',
+    },
+  ],
   background_setting: 'clean studio environment with neutral backdrop',
   lighting: DEFAULT_LIGHTING,
   aesthetics: DEFAULT_AESTHETICS,
   photographic_characteristics: DEFAULT_PHOTOGRAPHIC_CHARACTERISTICS,
   style_medium: 'photograph',
   artistic_style: 'realistic, detailed',
+  context: 'This is a professional product photograph for a gallery or portfolio, showcasing the sculptural form with attention to lighting and composition.',
 };
 
 // ============ Validation Utilities ============
