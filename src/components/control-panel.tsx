@@ -30,13 +30,21 @@ import {
   Settings,
   ArrowLeftRight,
   Grid3x3,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -115,29 +123,57 @@ export function ControlPanel({
   className = '',
 }: ControlPanelProps) {
   const [activeTab, setActiveTab] = useState<'gesture' | 'manual'>('gesture');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   
   // Get prompt store for user input
   const prompt = usePromptStore(state => state.prompt);
   const updatePrompt = usePromptStore(state => state.update);
   
-  // Local state for textarea
+  // Local state for all editable fields
   const [userPrompt, setUserPrompt] = useState(prompt.short_description);
+  const [backgroundSetting, setBackgroundSetting] = useState(prompt.background_setting);
+  const [styleMedium, setStyleMedium] = useState(prompt.style_medium);
+  const [artisticStyle, setArtisticStyle] = useState(prompt.artistic_style);
   
   // Sync local state with prompt store when it changes (e.g., from history restore)
   useEffect(() => {
     setUserPrompt(prompt.short_description);
-  }, [prompt.short_description]);
+    setBackgroundSetting(prompt.background_setting);
+    setStyleMedium(prompt.style_medium);
+    setArtisticStyle(prompt.artistic_style);
+  }, [prompt.short_description, prompt.background_setting, prompt.style_medium, prompt.artistic_style]);
   
-  // Handle prompt input change
+  // Handle prompt input change - updates both short_description and objects[0].description
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setUserPrompt(value);
     updatePrompt('short_description', value);
+    updatePrompt('objects.0.description', value);
   };
   
-  // Prevent keyboard shortcuts when typing in textarea
-  const handlePromptKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Stop propagation to prevent keyboard shortcuts from firing
+  // Handle background setting change
+  const handleBackgroundChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setBackgroundSetting(value);
+    updatePrompt('background_setting', value);
+  };
+  
+  // Handle style medium change
+  const handleStyleMediumChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setStyleMedium(value);
+    updatePrompt('style_medium', value);
+  };
+  
+  // Handle artistic style change
+  const handleArtisticStyleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setArtisticStyle(value);
+    updatePrompt('artistic_style', value);
+  };
+  
+  // Prevent keyboard shortcuts when typing in inputs
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     e.stopPropagation();
   };
 
@@ -167,7 +203,7 @@ export function ControlPanel({
             id="user-prompt"
             value={userPrompt}
             onChange={handlePromptChange}
-            onKeyDown={handlePromptKeyDown}
+            onKeyDown={handleInputKeyDown}
             placeholder="Enter your prompt (e.g., a beautiful landscape)"
             className="w-full min-h-[88px] bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 resize-y"
             rows={3}
@@ -176,6 +212,69 @@ export function ControlPanel({
             Gestures will modify this base prompt
           </p>
         </div>
+
+        {/* Advanced FIBO Fields - Collapsible */}
+        <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+          <CollapsibleTrigger asChild>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-between text-xs sm:text-sm text-zinc-400 hover:text-zinc-200 p-2"
+            >
+              <span>Style Options</span>
+              {showAdvanced ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 pt-2">
+            {/* Background Setting */}
+            <div className="space-y-1.5">
+              <Label htmlFor="background-setting" className="text-xs text-zinc-400">
+                Background
+              </Label>
+              <Input
+                id="background-setting"
+                value={backgroundSetting}
+                onChange={handleBackgroundChange}
+                onKeyDown={handleInputKeyDown}
+                placeholder="e.g., natural environment, studio, urban"
+                className="h-9 bg-zinc-800 border-zinc-700 text-white text-sm placeholder:text-zinc-500"
+              />
+            </div>
+            
+            {/* Style Medium */}
+            <div className="space-y-1.5">
+              <Label htmlFor="style-medium" className="text-xs text-zinc-400">
+                Medium
+              </Label>
+              <Input
+                id="style-medium"
+                value={styleMedium}
+                onChange={handleStyleMediumChange}
+                onKeyDown={handleInputKeyDown}
+                placeholder="e.g., photograph, oil painting, digital art"
+                className="h-9 bg-zinc-800 border-zinc-700 text-white text-sm placeholder:text-zinc-500"
+              />
+            </div>
+            
+            {/* Artistic Style */}
+            <div className="space-y-1.5">
+              <Label htmlFor="artistic-style" className="text-xs text-zinc-400">
+                Style
+              </Label>
+              <Input
+                id="artistic-style"
+                value={artisticStyle}
+                onChange={handleArtisticStyleChange}
+                onKeyDown={handleInputKeyDown}
+                placeholder="e.g., realistic, impressionist, cinematic"
+                className="h-9 bg-zinc-800 border-zinc-700 text-white text-sm placeholder:text-zinc-500"
+              />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Divider */}
         <div className="border-t border-zinc-800 my-4" />

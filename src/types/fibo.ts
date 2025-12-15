@@ -159,31 +159,36 @@ export const DEFAULT_PHOTOGRAPHIC_CHARACTERISTICS: PhotographicCharacteristics =
 };
 
 /**
+ * Default base prompt - single source of truth for the initial description
+ */
+export const DEFAULT_BASE_PROMPT = 'a beautiful landscape';
+
+/**
  * Default base FIBO prompt with all required fields
  * Used to initialize the JSON State Manager
  */
 export const DEFAULT_FIBO_PROMPT: FIBOStructuredPrompt = {
-  short_description: 'abstract sculpture in a studio setting',
+  short_description: DEFAULT_BASE_PROMPT,
   objects: [
     {
-      description: 'an abstract sculptural form with smooth, flowing curves',
+      description: DEFAULT_BASE_PROMPT,
       location: 'center',
       relationship: 'primary subject of the composition',
-      relative_size: 'large within frame',
-      shape_and_color: 'organic, flowing shape with neutral tones',
-      texture: 'smooth, polished surface',
-      appearance_details: 'modern, minimalist aesthetic with clean lines',
+      relative_size: 'fills the frame',
+      shape_and_color: 'natural colors and organic forms',
+      texture: 'varied natural textures',
+      appearance_details: 'photorealistic with attention to detail',
       number_of_objects: 1,
-      orientation: 'upright',
+      orientation: 'landscape orientation',
     },
   ],
-  background_setting: 'clean studio environment with neutral backdrop',
+  background_setting: 'natural environment',
   lighting: DEFAULT_LIGHTING,
   aesthetics: DEFAULT_AESTHETICS,
   photographic_characteristics: DEFAULT_PHOTOGRAPHIC_CHARACTERISTICS,
   style_medium: 'photograph',
   artistic_style: 'realistic, detailed',
-  context: 'This is a professional product photograph for a gallery or portfolio, showcasing the sculptural form with attention to lighting and composition.',
+  context: 'This is a professional photograph showcasing natural beauty with attention to lighting and composition.',
 };
 
 // ============ Validation Utilities ============
