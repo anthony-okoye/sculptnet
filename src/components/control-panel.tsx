@@ -80,6 +80,7 @@ export interface ControlPanelProps {
   onCompareClick?: () => void;
   onGalleryModeClick?: () => void;
   onSettingsUpdated?: () => void;
+  onCapturePose?: () => void;
   
   // Feature toggles
   collaborationEnabled?: boolean;
@@ -98,13 +99,18 @@ export interface ControlPanelProps {
 
 // ============ Pose Status Section ============
 
+interface PoseStatusSectionProps {
+  onCapturePose?: () => void;
+  isDetecting?: boolean;
+}
+
 /**
  * Pose Status Section Component
  * 
- * Displays current pose status with thumbnail and clear button.
+ * Displays current pose status with thumbnail, clear button, and manual capture button.
  * Requirements: 4.2, 4.3
  */
-function PoseStatusSection() {
+function PoseStatusSection({ onCapturePose, isDetecting = false }: PoseStatusSectionProps) {
   const { capturedPose, clear } = usePoseCaptureStore();
   
   const handleClearPose = () => {
@@ -160,22 +166,36 @@ function PoseStatusSection() {
           </Button>
         </div>
       ) : (
-        // No pose captured - show inactive status
-        <div className="flex items-center gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
-          <div className="w-12 h-12 rounded bg-zinc-700/50 flex items-center justify-center border border-zinc-600/50">
-            <Camera className="w-5 h-5 text-zinc-500" />
+        // No pose captured - show inactive status with capture button
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
+            <div className="w-12 h-12 rounded bg-zinc-700/50 flex items-center justify-center border border-zinc-600/50">
+              <Camera className="w-5 h-5 text-zinc-500" />
+            </div>
+            <div className="flex-1">
+              <Badge 
+                variant="secondary" 
+                className="bg-zinc-700 text-zinc-400 text-xs px-1.5 py-0 h-auto mb-1"
+              >
+                None
+              </Badge>
+              <p className="text-xs text-zinc-500">
+                Click button below to capture your current pose
+              </p>
+            </div>
           </div>
-          <div className="flex-1">
-            <Badge 
-              variant="secondary" 
-              className="bg-zinc-700 text-zinc-400 text-xs px-1.5 py-0 h-auto mb-1"
-            >
-              None
-            </Badge>
-            <p className="text-xs text-zinc-500">
-              Hold a pose for 2 seconds to capture
-            </p>
-          </div>
+          
+          {/* Manual Capture Button */}
+          <Button
+            onClick={onCapturePose}
+            variant="outline"
+            className="w-full min-h-[44px] text-sm sm:text-base"
+            size="lg"
+            disabled={!onCapturePose || !isDetecting}
+          >
+            <Camera className="w-4 h-4 mr-2" />
+            Capture Pose
+          </Button>
         </div>
       )}
     </div>
@@ -203,6 +223,7 @@ export function ControlPanel({
   onCompareClick,
   onGalleryModeClick,
   onSettingsUpdated,
+  onCapturePose,
   collaborationEnabled = false,
   onCollaborationToggle,
   isCollaborationActive = false,
@@ -550,7 +571,7 @@ export function ControlPanel({
         <div className="border-t border-zinc-800 my-4" />
 
         {/* Pose Status Section - Requirements: 4.2, 4.3 */}
-        <PoseStatusSection />
+        <PoseStatusSection onCapturePose={onCapturePose} isDetecting={isDetecting} />
 
         {/* Divider */}
         <div className="border-t border-zinc-800 my-4" />

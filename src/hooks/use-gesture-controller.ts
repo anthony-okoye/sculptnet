@@ -85,6 +85,7 @@ export interface GestureController {
   startDetection: () => void;
   stopDetection: () => void;
   triggerGeneration: () => Promise<GenerationResult | null>;
+  capturePoseNow: () => void;
   reset: () => void;
   dispose: () => void;
   
@@ -616,6 +617,23 @@ export function useGestureController(
   }, [triggerGenerationInternal]);
 
   /**
+   * Manually capture the current pose immediately
+   * Uses the most recent hand landmarks from detection
+   */
+  const capturePoseNow = useCallback(() => {
+    if (!previousLandmarksRef.current || previousLandmarksRef.current.length === 0) {
+      toast.error('No hands detected', {
+        description: 'Please ensure your hands are visible to the camera',
+        duration: 2000,
+      });
+      return;
+    }
+
+    // Use the current landmarks to capture pose
+    handlePoseCapture(previousLandmarksRef.current);
+  }, [handlePoseCapture]);
+
+  /**
    * Reset the controller state
    */
   const reset = useCallback(() => {
@@ -709,6 +727,7 @@ export function useGestureController(
     startDetection,
     stopDetection,
     triggerGeneration,
+    capturePoseNow,
     reset,
     dispose,
     getVideoElement,

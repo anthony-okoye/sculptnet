@@ -220,6 +220,12 @@ export default function Home() {
     }
   }, [gestureController]);
 
+  // Manual pose capture trigger
+  const handleCapturePose = useCallback(() => {
+    console.log('[SculptNet] 📸 handleCapturePose called');
+    gestureController.capturePoseNow();
+  }, [gestureController]);
+
   // Export handlers
   const handleExportSingle = useCallback(async () => {
     const latest = generationHistory[generationHistory.length - 1];
@@ -552,6 +558,7 @@ export default function Home() {
               onStartDetection={handleStartGestures}
               onStopDetection={handleStopGestures}
               onGenerateNow={handleManualGenerate}
+              onCapturePose={handleCapturePose}
               onExportSingle={handleExportSingle}
               onExportMultiple={handleExportMultiple}
               onExportPSD={handleExportPSD}
